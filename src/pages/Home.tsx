@@ -13,7 +13,23 @@ const Home = () => {
       <Stats />
       <Features />
       <Testimonials />
-      <Plans />
+      
+      {/* Sección de Planes Destacados */}
+      <section className="py-16 bg-gradient-to-br from-[#F5F7FA] via-white to-[#f0f7eb]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Planes Destacados
+            </h2>
+            <p className="text-xl text-gray-600">
+              Descubre nuestros planes más populares y encuentra el que mejor se adapte a ti
+            </p>
+          </div>
+          
+          <Plans showFeaturedOnly={true} />
+        </div>
+      </section>
+      
       <BaremoCalculator />
     </>
   );

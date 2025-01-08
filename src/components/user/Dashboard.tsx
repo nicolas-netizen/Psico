@@ -1,68 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Book, Clock, Award, Settings } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import AdminDashboard from '../../pages/AdminDashboard';
+import api from '../../services/api';
+import { Test } from '../../types/Test';
+import { Plan } from '../../types/Plan';
 
 const UserDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('tests');
   const { user, isAuthenticated } = useAuth();
+  const [availableTests, setAvailableTests] = useState<Test[]>([]);
+  const [testHistory, setTestHistory] = useState<any[]>([]);
+  const [userPlan, setUserPlan] = useState<Plan | null>(null);
 
-  // Determine user's plan from subscription
-  const userPlan = user?.subscription?.planName?.toLowerCase() || 'básico';
+  useEffect(() => {
+    const fetchUserPlanDetails = async () => {
+      try {
+        // Fetch user's plan details
+        if (user?.subscription?.planId) {
+          const planDetails = await api.getPlanById(user.subscription.planId);
+          setUserPlan(planDetails);
+        }
+      } catch (error) {
+        console.error('Error fetching plan details:', error);
+      }
+    };
+
+    const fetchTestsAndHistory = async () => {
+      try {
+        // Fetch tests for the user's plan
+        const planTests = await api.getTestsByPlan(user?.subscription?.planId || 'plan-1');
+        console.log('Dashboard Available Tests:', planTests);
+        setAvailableTests(planTests);
+
+        // Fetch user's test history
+        const history = await api.getUserTestHistory(user?.id);
+        console.log('Dashboard Test History:', history);
+        setTestHistory(history);
+      } catch (error) {
+        console.error('Error fetching tests:', error);
+      }
+    };
+
+    if (user?.id) {
+      fetchUserPlanDetails();
+      fetchTestsAndHistory();
+    }
+  }, [user?.id, user?.subscription?.planId]);
 
   // Si el usuario es admin, mostrar el panel de administración
   if (user?.role === 'admin') {
     return <AdminDashboard />;
   }
 
-  const testHistory = [
-    {
-      id: 1,
-      name: 'Test de Personalidad',
-      category: 'Psicología',
-      date: '2024-01-04',
-      score: 85,
-    },
-    {
-      id: 2,
-      name: 'Test de Aptitud',
-      category: 'Profesional',
-      date: '2024-01-03',
-      score: 92,
-    },
-  ];
+  const canAccessTest = (testPlans: string[] | undefined) => {
+    if (!userPlan) return false;
 
-  const availableTests = [
-    {
-      id: 1,
-      name: 'Test de Personalidad',
-      category: 'Psicología',
-      difficulty: 'Intermedio',
-      duration: '30 min',
-      requiredPlan: 'básico',
-    },
-    {
-      id: 2,
-      name: 'Test de Aptitud',
-      category: 'Profesional',
-      difficulty: 'Avanzado',
-      duration: '45 min',
-      requiredPlan: 'premium',
-    },
-  ];
+    // If test has no plan restrictions, allow access
+    if (!testPlans || testPlans.length === 0) return true;
 
-  const canAccessTest = (requiredPlan: string) => {
-    // Normalize plan names
-    const currentPlan = userPlan.toLowerCase();
-    const requiredPlanNormalized = requiredPlan.toLowerCase();
-
-    // Basic plan can access basic tests
-    if (requiredPlanNormalized === 'básico') return true;
-
-    // Premium plan can access all tests
-    if (currentPlan === 'premium') return true;
-
-    return false;
+    // Check if user's plan matches any of the test's plans
+    return testPlans.some(planId => 
+      planId === user?.subscription?.planId || 
+      (userPlan.name.toLowerCase() === 'god' && planId.includes('plan-'))
+    );
   };
 
   return (
@@ -75,7 +76,7 @@ const UserDashboard: React.FC = () => {
             Bienvenido, {user?.name || user?.email}
           </p>
           <div className="mt-4 inline-block px-4 py-2 bg-[#91c26a] bg-opacity-10 rounded-full text-[#6ea844] font-medium">
-            {userPlan || 'Plan Básico'}
+            {userPlan?.name || 'Plan no definido'}
           </div>
         </div>
 
@@ -134,82 +135,89 @@ const UserDashboard: React.FC = () => {
           {activeTab === 'tests' && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Tests Disponibles</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {availableTests.map((test) => (
-                  <div
-                    key={test.id}
-                    className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow"
-                  >
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">{test.name}</h3>
-                    <div className="space-y-2 mb-4">
-                      <p className="text-sm text-gray-600">
-                        Categoría: {test.category}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Dificultad: {test.difficulty}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Duración: {test.duration}
-                      </p>
-                    </div>
-                    <button
-                      className={`w-full py-2 px-4 rounded-lg font-medium ${
-                        canAccessTest(test.requiredPlan)
-                          ? 'bg-gradient-to-r from-[#91c26a] to-[#6ea844] text-white hover:shadow-md'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      } transition-all`}
-                      disabled={!canAccessTest(test.requiredPlan)}
+              {availableTests.length === 0 ? (
+                <p className="text-gray-500">No hay tests disponibles para tu plan.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {availableTests.map((test) => (
+                    <div
+                      key={test.id}
+                      className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow"
                     >
-                      {canAccessTest(test.requiredPlan) ? 'Comenzar Test' : 'Requiere Plan Premium'}
-                    </button>
-                  </div>
-                ))}
-              </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">{test.title}</h3>
+                      <div className="space-y-2 mb-4">
+                        <p className="text-sm text-gray-600">
+                          Categoría: {test.category || 'No especificada'}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Dificultad: {test.difficulty || 'No especificada'}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Duración: {test.timeLimit || 30} min
+                        </p>
+                      </div>
+                      <button
+                        className={`w-full py-2 px-4 rounded-lg font-medium ${
+                          canAccessTest(test.plans)
+                            ? 'bg-gradient-to-r from-[#91c26a] to-[#6ea844] text-white hover:shadow-md'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        } transition-all`}
+                        disabled={!canAccessTest(test.plans)}
+                      >
+                        {canAccessTest(test.plans) ? 'Comenzar Test' : 'No disponible para tu plan'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'history' && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-900">Historial de Tests</h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Nombre del Test
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Categoría
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Fecha
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Puntuación
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {testHistory.map((test) => (
-                      <tr key={test.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {test.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {test.category}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {test.date}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2 py-1 text-sm text-[#6ea844] bg-[#91c26a] bg-opacity-10 rounded-full">
-                            {test.score}%</span>
-                        </td>
+              {testHistory.length === 0 ? (
+                <p className="text-gray-500">No tienes historial de tests.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Nombre del Test
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Categoría
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Fecha
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Puntuación
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {testHistory.map((test) => (
+                        <tr key={test.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {test.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {test.category}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {test.date}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {test.score}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

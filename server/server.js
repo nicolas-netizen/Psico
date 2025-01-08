@@ -35,6 +35,8 @@ app.use(express.json());
 const USUARIOS_FILE = path.join(__dirname, 'usuarios.json');
 const PLANES_FILE = path.join(__dirname, 'planes.json');
 const TESTS_FILE = path.join(__dirname, 'tests.json');
+const TEST_HISTORY_FILE = path.join(__dirname, 'test-history.json');
+const TEST_RESULTS_FILE = path.join(__dirname, 'test_results.json');
 
 // Utility functions
 function readJsonFile(filePath) {
@@ -570,32 +572,342 @@ app.get('/usuarios', (req, res) => {
   }
 });
 
-// File upload endpoint
-app.post('/upload', (req, res) => {
+// Configuración de multer para subir archivos
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, 'uploads/tests'));
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    const allowedFileTypes = /pdf|docx?|txt/;
+    const extname = allowedFileTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedFileTypes.test(file.mimetype);
+
+    if (extname && mimetype) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten archivos PDF, DOC, DOCX y TXT'));
+    }
+  }
+});
+
+// Ruta para subir archivos de tests
+app.post('/upload', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No se ha subido ningún archivo' });
+  }
+
+  res.json({
+    message: 'Archivo subido exitosamente',
+    path: `/uploads/tests/${req.file.filename}`
+  });
+});
+
+// Ruta para crear un nuevo test
+app.post('/tests', (req, res) => {
   try {
-    const storage = multer.diskStorage({
-      destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, 'public/tests'))
-      },
-      filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname)) // Unique filename
-      }
-    });
-    const upload = multer({ storage: storage });
-    upload.single('file')(req, res, (err) => {
-      if (err) {
-        return res.status(400).json({ message: 'No file uploaded' });
-      }
-      
-      res.json({ 
-        message: 'File uploaded successfully', 
-        filename: req.file.filename,
-        path: `/tests/${req.file.filename}`
+    const newTestData = req.body;
+
+    // Validar datos de entrada
+    if (!newTestData.title || !newTestData.description || 
+        !newTestData.questions || newTestData.questions.length === 0 ||
+        !newTestData.plans || newTestData.plans.length === 0) {
+      return res.status(400).json({ 
+        message: 'Datos incompletos para crear el test',
+        details: {
+          title: !!newTestData.title,
+          description: !!newTestData.description,
+          questions: newTestData.questions?.length || 0,
+          plans: newTestData.plans?.length || 0
+        }
       });
+    }
+
+    // Leer los tests existentes
+    let tests = readJsonFile(TESTS_FILE);
+
+    // Crear nuevo test con ID único
+    const newTest = {
+      ...newTestData,
+      id: `test-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Agregar el nuevo test
+    tests.push(newTest);
+
+    // Guardar los tests actualizados
+    writeJsonFile(TESTS_FILE, tests);
+    
+    res.status(201).json(newTest);
+  } catch (error) {
+    console.error('Error creating test:', error);
+    res.status(500).json({ 
+      message: 'Error al crear el test',
+      error: error.toString() 
+    });
+  }
+});
+
+// Ruta para obtener tests de un plan específico
+app.get('/tests/plan/:planId', (req, res) => {
+  try {
+    const { planId } = req.params;
+    const tests = readJsonFile(TESTS_FILE);
+
+    // Filtrar tests que incluyen el planId
+    const planTests = tests.filter(test => 
+      test.plans.includes(planId)
+    );
+
+    res.status(200).json(planTests);
+  } catch (error) {
+    console.error('Error fetching tests for plan:', error);
+    res.status(500).json({ message: 'Error al obtener los tests del plan' });
+  }
+});
+
+// Ruta para obtener tests disponibles para un usuario en un plan específico
+app.get('/tests/user/:userId/plan/:planId', (req, res) => {
+  try {
+    const { userId, planId } = req.params;
+    const tests = readJsonFile(TESTS_FILE);
+    const userHistory = readJsonFile(TEST_HISTORY_FILE);
+
+    // Filtrar tests que incluyen el planId
+    const planTests = tests.filter(test => 
+      test.plans.includes(planId)
+    );
+
+    // Filtrar tests que el usuario no ha completado
+    const availableTests = planTests.filter(test => {
+      const userTestHistory = userHistory.find(
+        history => history.userId === userId && history.testId === test.id
+      );
+      return !userTestHistory || !userTestHistory.completed;
+    });
+
+    res.status(200).json(availableTests);
+  } catch (error) {
+    console.error('Error fetching available tests:', error);
+    res.status(500).json({ message: 'Error al obtener los tests disponibles' });
+  }
+});
+
+// Ruta para obtener todos los tests
+app.get('/tests', (req, res) => {
+  try {
+    const tests = readJsonFile(TESTS_FILE);
+    res.status(200).json(tests);
+  } catch (error) {
+    console.error('Error fetching tests:', error);
+    res.status(500).json({ message: 'Error al obtener los tests' });
+  }
+});
+
+// Ruta para actualizar un test existente
+app.put('/tests/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const updatedTestData = req.body;
+
+    // Leer los tests existentes
+    let tests = readJsonFile(TESTS_FILE);
+    
+    // Encontrar el índice del test a actualizar
+    const testIndex = tests.findIndex(test => test.id === id);
+    
+    if (testIndex === -1) {
+      return res.status(404).json({ message: 'Test no encontrado' });
+    }
+
+    // Actualizar el test
+    tests[testIndex] = {
+      ...tests[testIndex],
+      ...updatedTestData,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Guardar los tests actualizados
+    writeJsonFile(TESTS_FILE, tests);
+    
+    res.json({
+      message: 'Test actualizado exitosamente',
+      test: tests[testIndex]
     });
   } catch (error) {
-    console.error('Error uploading file:', error);
-    res.status(500).json({ message: 'Error al subir el archivo' });
+    console.error('Error updating test:', error);
+    res.status(500).json({ message: 'Error al actualizar el test' });
+  }
+});
+
+// Ruta para eliminar un test
+app.delete('/tests/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Leer los tests existentes
+    let tests = readJsonFile(TESTS_FILE);
+    
+    // Filtrar para eliminar el test
+    const updatedTests = tests.filter(test => test.id !== id);
+    
+    if (updatedTests.length === tests.length) {
+      return res.status(404).json({ message: 'Test no encontrado' });
+    }
+
+    // Guardar los tests actualizados
+    writeJsonFile(TESTS_FILE, updatedTests);
+    
+    res.json({ 
+      message: 'Test eliminado exitosamente' 
+    });
+  } catch (error) {
+    console.error('Error deleting test:', error);
+    res.status(500).json({ message: 'Error al eliminar el test' });
+  }
+});
+
+// Ruta para guardar el historial de tests
+app.post('/test-history', (req, res) => {
+  try {
+    const { userId, testId, score, totalQuestions, percentage, completedAt } = req.body;
+
+    // Validar datos de entrada
+    if (!userId || !testId) {
+      return res.status(400).json({ message: 'Datos incompletos para guardar el historial del test' });
+    }
+
+    // Leer el historial de tests existente
+    const testHistory = readJsonFile(TEST_HISTORY_FILE);
+
+    // Crear nueva entrada de historial
+    const newHistoryEntry = {
+      id: `history-${Date.now()}`,
+      userId,
+      testId,
+      score,
+      totalQuestions,
+      percentage,
+      completedAt
+    };
+
+    // Agregar la nueva entrada
+    testHistory.push(newHistoryEntry);
+
+    // Guardar el historial actualizado
+    writeJsonFile(TEST_HISTORY_FILE, testHistory);
+    
+    res.status(201).json(newHistoryEntry);
+  } catch (error) {
+    console.error('Error saving test history:', error);
+    res.status(500).json({ message: 'Error al guardar el historial del test' });
+  }
+});
+
+// Ruta para obtener el historial de tests de un usuario
+app.get('/test-history/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Leer el historial de tests
+    const testHistory = readJsonFile(TEST_HISTORY_FILE);
+
+    // Filtrar historial por usuario
+    const userTestHistory = testHistory.filter(history => 
+      history.userId === userId
+    );
+
+    // Ordenar por fecha de completado (más reciente primero)
+    const sortedHistory = userTestHistory.sort((a, b) => 
+      new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+    );
+
+    res.status(200).json(sortedHistory);
+  } catch (error) {
+    console.error('Error fetching user test history:', error);
+    res.status(500).json({ message: 'Error al obtener el historial de tests' });
+  }
+});
+
+// Ruta para obtener tests por plan de usuario
+app.get('/tests-by-plan/:planId', (req, res) => {
+  try {
+    const { planId } = req.params;
+    console.log('DEBUG: Requested Plan ID:', planId);
+
+    // Leer los tests existentes
+    const tests = readJsonFile(TESTS_FILE);
+    console.log('DEBUG: All Tests:', JSON.stringify(tests, null, 2));
+
+    // Filtrar tests por plan
+    const planTests = tests.filter(test => {
+      console.log('DEBUG: Checking Test:', JSON.stringify(test, null, 2));
+      console.log('DEBUG: Test Plans:', test.plans);
+      console.log('DEBUG: Matching Condition:', 
+        test.plans && (test.plans.includes(planId) || test.plans.includes(parseInt(planId.replace('plan-', ''))))
+      );
+      
+      return test.plans && (
+        test.plans.includes(planId) || 
+        test.plans.includes(parseInt(planId.replace('plan-', '')))
+      );
+    });
+
+    console.log('DEBUG: Filtered Plan Tests:', JSON.stringify(planTests, null, 2));
+
+    // Si no hay tests para el plan, devolver un array vacío
+    const normalizedTests = planTests.map(test => ({
+      ...test,
+      // Normalizar el formato de los tests
+      id: test.id || `test-${Date.now()}`,
+      title: test.title || 'Test Sin Título',
+      description: test.description || 'Sin descripción',
+      questions: test.questions || [],
+      plans: test.plans || [],
+      difficulty: test.difficulty || 'basic',
+      timeLimit: test.timeLimit || 30
+    }));
+
+    console.log('DEBUG: Normalized Tests:', JSON.stringify(normalizedTests, null, 2));
+
+    res.status(200).json(normalizedTests);
+  } catch (error) {
+    console.error('ERROR fetching tests for plan:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener los tests para el plan',
+      error: error.toString() 
+    });
+  }
+});
+
+// Ruta para obtener detalles de un plan específico
+app.get('/plan/:planId', (req, res) => {
+  try {
+    const { planId } = req.params;
+    const plans = readJsonFile(PLANES_FILE);
+    
+    const plan = plans.find(p => p.id === planId);
+    
+    if (!plan) {
+      return res.status(404).json({ message: 'Plan no encontrado' });
+    }
+    
+    res.status(200).json(plan);
+  } catch (error) {
+    console.error('Error fetching plan details:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener los detalles del plan',
+      error: error.toString() 
+    });
   }
 });
 
@@ -693,3 +1005,70 @@ initializeServer()
   });
 
 module.exports = app; // For testing purposes
+
+// Ruta para guardar resultados de tests
+app.post('/test-result', (req, res) => {
+  try {
+    const testResult = req.body;
+    
+    // Leer resultados existentes
+    let testResults = [];
+    try {
+      testResults = readJsonFile(TEST_RESULTS_FILE);
+    } catch (readError) {
+      console.log('No existing test results file, creating new one');
+    }
+
+    // Agregar nuevo resultado
+    testResults.push({
+      ...testResult,
+      id: `result-${Date.now()}`,
+      createdAt: new Date().toISOString()
+    });
+
+    // Guardar resultados actualizados
+    writeJsonFile(TEST_RESULTS_FILE, testResults);
+
+    res.status(201).json({ 
+      message: 'Resultado de test guardado exitosamente',
+      result: testResult 
+    });
+  } catch (error) {
+    console.error('Error saving test result:', error);
+    res.status(500).json({ 
+      message: 'Error al guardar el resultado del test',
+      error: error.toString() 
+    });
+  }
+});
+
+// Ruta para obtener historial de tests de un usuario
+app.get('/user-test-history/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Leer resultados de tests
+    const testResults = readJsonFile(TEST_RESULTS_FILE);
+    
+    // Filtrar resultados por usuario
+    const userTestHistory = testResults
+      .filter(result => result.userId === userId)
+      .map(result => ({
+        id: result.id,
+        testId: result.testId,
+        score: result.score,
+        totalQuestions: result.totalQuestions,
+        correctAnswers: result.correctAnswers,
+        completedAt: result.completedAt
+      }))
+      .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+
+    res.status(200).json(userTestHistory);
+  } catch (error) {
+    console.error('Error fetching user test history:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener el historial de tests',
+      error: error.toString() 
+    });
+  }
+});

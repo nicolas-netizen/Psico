@@ -2,7 +2,8 @@ export enum QuestionType {
   MULTIPLE_CHOICE = 'multiple_choice',
   TRUE_FALSE = 'true_false',
   OPEN_ANSWER = 'open_answer',
-  MATCHING = 'matching'
+  MATCHING = 'matching',
+  INTERACTIVE = 'interactive'
 }
 
 export interface TestOption {
@@ -17,13 +18,22 @@ export interface TestQuestion {
   type: QuestionType;
   options?: TestOption[];
   correctAnswer?: string | string[];
+  interactiveOptions?: {
+    options: string[];
+    correctAnswer: number;
+  }
 }
 
 export interface Test {
   id: string;
-  name: string;
-  subject: string;
-  difficulty: 'easy' | 'medium' | 'hard';
+  title: string;
+  description: string;
+  fileUrl: string;
+  plans: string[]; // Array of plan IDs this test is associated with
+  category?: string;
+  difficulty?: 'basic' | 'intermediate' | 'advanced';
+  createdAt: string;
+  updatedAt: string;
   questions: TestQuestion[];
   timeLimit?: number; // En minutos
 }

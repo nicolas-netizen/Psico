@@ -1,133 +1,308 @@
-import React, { useState } from 'react';
-import { Plus, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
+import { Test, TestQuestion } from '../../types/Test';
+import api from '../../services/api';
+import { Trash2, Plus } from 'lucide-react';
 
-interface Question {
-  text: string;
-  options: string[];
-  correctAnswer: number;
+interface TestFormProps {
+  initialTest?: Test | null;
+  onTestCreated?: (test: Test) => void;
+  onClose?: () => void;
 }
 
-const TestForm = () => {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [questions, setQuestions] = useState<Question[]>([
-    { text: '', options: ['', '', '', ''], correctAnswer: 0 }
-  ]);
+const TestForm: React.FC<TestFormProps> = ({ 
+  initialTest = null, 
+  onTestCreated, 
+  onClose 
+}) => {
+  const [plans, setPlans] = useState<any[]>([]);
+  const [formData, setFormData] = useState<Partial<Test>>({
+    title: initialTest?.title || '',
+    description: initialTest?.description || '',
+    questions: initialTest?.questions || [],
+    plans: initialTest?.plans || [],
+    category: initialTest?.category || '',
+    difficulty: initialTest?.difficulty || 'basic',
+    timeLimit: initialTest?.timeLimit || 30
+  });
 
-  const addQuestion = () => {
-    setQuestions([...questions, { text: '', options: ['', '', '', ''], correctAnswer: 0 }]);
+  useEffect(() => {
+    // Fetch available plans when component mounts
+    const fetchPlans = async () => {
+      try {
+        const fetchedPlans = await api.getPlans();
+        setPlans(fetchedPlans);
+      } catch (error) {
+        toast.error('No se pudieron cargar los planes');
+      }
+    };
+
+    fetchPlans();
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handlePlanSelection = (planId: string) => {
+    setFormData(prev => {
+      const updatedPlans = prev.plans?.includes(planId)
+        ? prev.plans?.filter(id => id !== planId)
+        : [...(prev.plans || []), planId];
+      
+      return { ...prev, plans: updatedPlans };
+    });
+  };
+
+  const addQuestion = () => {
+    const newQuestion: TestQuestion = {
+      id: `question-${Date.now()}`,
+      text: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      questions: [...(prev.questions || []), newQuestion]
+    }));
+  };
+
+  const updateQuestion = (index: number, updates: Partial<TestQuestion>) => {
+    const updatedQuestions = [...(formData.questions || [])];
+    updatedQuestions[index] = { ...updatedQuestions[index], ...updates };
+
+    setFormData(prev => ({
+      ...prev,
+      questions: updatedQuestions
+    }));
+  };
+
+  const removeQuestion = (index: number) => {
+    const updatedQuestions = formData.questions?.filter((_, i) => i !== index);
+    
+    setFormData(prev => ({
+      ...prev,
+      questions: updatedQuestions
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement test creation
+    
+    // Validate form data
+    if (!formData.title || !formData.description || 
+        !formData.plans || formData.plans.length === 0 ||
+        !formData.questions || formData.questions.length === 0) {
+      toast.error('Por favor complete todos los campos');
+      return;
+    }
+
+    // Validate questions
+    const invalidQuestions = formData.questions.some(q => 
+      !q.text || q.options.some(opt => !opt)
+    );
+
+    if (invalidQuestions) {
+      toast.error('Por favor complete todas las preguntas y opciones');
+      return;
+    }
+
+    try {
+      const testData: Partial<Test> = {
+        ...formData,
+        id: initialTest?.id || `test-${Date.now()}`,
+        createdAt: initialTest?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      let result;
+      if (initialTest) {
+        // Update existing test
+        result = await api.updateTest(testData.id!, testData);
+      } else {
+        // Create new test
+        result = await api.createTest(testData);
+      }
+      
+      toast.success(initialTest ? 'Test actualizado exitosamente' : 'Test creado exitosamente');
+      
+      // Call callback if provided
+      if (onTestCreated) {
+        onTestCreated(result);
+      }
+
+      // Close the form
+      if (onClose) {
+        onClose();
+      }
+    } catch (error) {
+      toast.error(initialTest ? 'Error al actualizar el test' : 'Error al crear el test');
+      console.error(error);
+    }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h2 className="text-2xl font-bold mb-6 font-outfit">Crear Nuevo Test</h2>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-              Título del Test
-            </label>
-            <input
-              type="text"
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-              Descripción
-            </label>
-            <textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-            />
-          </div>
-        </div>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-gray-700 font-medium mb-2">Título del Test</label>
+        <input
+          type="text"
+          name="title"
+          value={formData.title}
+          onChange={handleInputChange}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Ingrese el título del test"
+          required
+        />
+      </div>
 
-        {questions.map((question, qIndex) => (
-          <div key={qIndex} className="bg-white rounded-xl shadow-sm p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Pregunta {qIndex + 1}
-              </label>
+      <div>
+        <label className="block text-gray-700 font-medium mb-2">Descripción</label>
+        <textarea
+          name="description"
+          value={formData.description}
+          onChange={handleInputChange}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Describa el test"
+          rows={3}
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-gray-700 font-medium mb-2">Tiempo Límite (minutos)</label>
+        <input
+          type="number"
+          name="timeLimit"
+          value={formData.timeLimit}
+          onChange={handleInputChange}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          min={5}
+          max={120}
+        />
+      </div>
+
+      <div>
+        <label className="block text-gray-700 font-medium mb-2">Planes Disponibles</label>
+        <div className="flex flex-wrap gap-2">
+          {plans.length === 0 ? (
+            <p className="text-gray-500">No hay planes disponibles</p>
+          ) : (
+            plans.map((plan) => (
+              <div key={plan.id} className="flex items-center">
+                <input
+                  type="checkbox"
+                  id={`plan-${plan.id}`}
+                  checked={formData.plans?.includes(plan.id)}
+                  onChange={() => handlePlanSelection(plan.id)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label 
+                  htmlFor={`plan-${plan.id}`} 
+                  className="ml-2 block text-sm text-gray-900"
+                >
+                  {plan.name}
+                </label>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex justify-between items-center mb-2">
+          <label className="block text-gray-700 font-medium">Preguntas</label>
+          <button
+            type="button"
+            onClick={addQuestion}
+            className="flex items-center text-blue-600 hover:text-blue-800"
+          >
+            <Plus className="mr-1" size={16} /> Añadir Pregunta
+          </button>
+        </div>
+        {formData.questions?.map((question, index) => (
+          <div 
+            key={question.id} 
+            className="border border-gray-200 rounded-md p-4 mb-4 relative"
+          >
+            <button
+              type="button"
+              onClick={() => removeQuestion(index)}
+              className="absolute top-2 right-2 text-red-500 hover:text-red-700"
+            >
+              <Trash2 size={16} />
+            </button>
+            <div className="mb-3">
+              <label className="block text-gray-700 font-medium mb-2">Texto de la Pregunta</label>
               <input
                 type="text"
                 value={question.text}
-                onChange={(e) => {
-                  const newQuestions = [...questions];
-                  newQuestions[qIndex].text = e.target.value;
-                  setQuestions(newQuestions);
-                }}
-                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                onChange={(e) => updateQuestion(index, { text: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Escriba la pregunta"
                 required
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {question.options.map((option, oIndex) => (
-                <div key={oIndex}>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Opción {oIndex + 1}
-                  </label>
-                  <div className="mt-1 flex items-center">
+            <div>
+              <label className="block text-gray-700 font-medium mb-2">Opciones</label>
+              <div className="grid grid-cols-2 gap-2">
+                {question.options.map((option, optIndex) => (
+                  <div key={optIndex} className="flex items-center">
                     <input
                       type="text"
                       value={option}
                       onChange={(e) => {
-                        const newQuestions = [...questions];
-                        newQuestions[qIndex].options[oIndex] = e.target.value;
-                        setQuestions(newQuestions);
+                        const newOptions = [...question.options];
+                        newOptions[optIndex] = e.target.value;
+                        updateQuestion(index, { options: newOptions });
                       }}
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={`Opción ${optIndex + 1}`}
                       required
                     />
                     <input
                       type="radio"
-                      name={`correct-${qIndex}`}
-                      checked={question.correctAnswer === oIndex}
-                      onChange={() => {
-                        const newQuestions = [...questions];
-                        newQuestions[qIndex].correctAnswer = oIndex;
-                        setQuestions(newQuestions);
-                      }}
-                      className="ml-2 h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                      name={`correct-${question.id}`}
+                      checked={question.correctAnswer === optIndex}
+                      onChange={() => updateQuestion(index, { correctAnswer: optIndex })}
+                      className="ml-2"
                     />
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         ))}
+      </div>
 
-        <div className="flex justify-between">
-          <button
-            type="button"
-            onClick={addQuestion}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Añadir Pregunta
-          </button>
-          <button
-            type="submit"
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-          >
-            <Save className="w-4 h-4 mr-2" />
-            Guardar Test
-          </button>
-        </div>
-      </form>
-    </div>
+      <div>
+        <label className="block text-gray-700 font-medium mb-2">Dificultad</label>
+        <select
+          name="difficulty"
+          value={formData.difficulty}
+          onChange={handleInputChange}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="basic">Básico</option>
+          <option value="intermediate">Intermedio</option>
+          <option value="advanced">Avanzado</option>
+        </select>
+      </div>
+
+      <div className="pt-4">
+        <button
+          type="submit"
+          className="w-full py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+        >
+          {initialTest ? 'Actualizar Test' : 'Crear Test'}
+        </button>
+      </div>
+    </form>
   );
 };
 

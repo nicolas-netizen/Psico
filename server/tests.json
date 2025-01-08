@@ -19,12 +19,83 @@
     ]
   },
   {
-    "id": 3,
-    "title": "Matematica",
+    "title": "Test",
     "description": "Test",
-    "fileUrl": "/tests/1736186485306.pdf",
+    "questions": [
+      {
+        "id": "question-1736366192251",
+        "text": "a1",
+        "options": [
+          "12",
+          "2",
+          "3",
+          "4"
+        ],
+        "correctAnswer": 0
+      }
+    ],
     "plans": [
-      "plan-1736186199450"
-    ]
+      "plan-1736365177702",
+      "plan-1"
+    ],
+    "category": "",
+    "difficulty": "basic",
+    "timeLimit": 30,
+    "id": "test-1736366206451",
+    "createdAt": "2025-01-08T19:56:46.451Z",
+    "updatedAt": "2025-01-08T20:14:13.208Z"
+  },
+  {
+    "title": "Test basico",
+    "description": "Test",
+    "questions": [
+      {
+        "id": "question-1736367749734",
+        "text": "1112",
+        "options": [
+          "2",
+          "3",
+          "4",
+          "5"
+        ],
+        "correctAnswer": 0
+      }
+    ],
+    "plans": [
+      "plan-1"
+    ],
+    "category": "",
+    "difficulty": "basic",
+    "timeLimit": 30,
+    "id": "test-1736367759409",
+    "createdAt": "2025-01-08T20:22:39.409Z",
+    "updatedAt": "2025-01-08T20:22:39.409Z"
+  },
+  {
+    "title": "Test40",
+    "description": "Test40",
+    "questions": [
+      {
+        "id": "question-1736368931359",
+        "text": "2+2",
+        "options": [
+          "4",
+          "test30",
+          "test40",
+          "test150"
+        ],
+        "correctAnswer": 0
+      }
+    ],
+    "plans": [
+      "plan-1",
+      "plan-1736365177702"
+    ],
+    "category": "",
+    "difficulty": "advanced",
+    "timeLimit": "120",
+    "id": "test-1736369568039",
+    "createdAt": "2025-01-08T20:52:48.039Z",
+    "updatedAt": "2025-01-08T20:52:48.039Z"
   }
 ]

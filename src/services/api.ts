@@ -405,6 +405,220 @@ export const api = {
       throw error;
     }
   },
+
+  // Test-related API methods
+  createTest: async (testData: Partial<Test>) => {
+    try {
+      // Validate required fields
+      if (!testData.title || !testData.description) {
+        throw new Error('Título y descripción son obligatorios');
+      }
+
+      if (!testData.questions || testData.questions.length === 0) {
+        throw new Error('Debe agregar al menos una pregunta');
+      }
+
+      if (!testData.plans || testData.plans.length === 0) {
+        throw new Error('Debe seleccionar al menos un plan');
+      }
+
+      // Ensure all questions have valid data
+      testData.questions.forEach((question, index) => {
+        if (!question.text) {
+          throw new Error(`La pregunta ${index + 1} requiere un texto`);
+        }
+        if (!question.options || question.options.length < 2) {
+          throw new Error(`La pregunta ${index + 1} debe tener al menos 2 opciones`);
+        }
+        if (question.correctAnswer === undefined || question.correctAnswer < 0) {
+          throw new Error(`La pregunta ${index + 1} requiere una respuesta correcta`);
+        }
+      });
+
+      // Prepare data for submission
+      const preparedTestData = {
+        ...testData,
+        id: testData.id || `test-${Date.now()}`,
+        createdAt: testData.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        difficulty: testData.difficulty || 'basic',
+        timeLimit: testData.timeLimit || 30
+      };
+
+      // Make API call
+      const response = await apiClient.post('/tests', preparedTestData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating test:', error);
+      
+      // Extract meaningful error message
+      const errorMessage = error.response?.data?.message || 
+                           error.message || 
+                           'Error al crear el test';
+      
+      throw new Error(errorMessage);
+    }
+  },
+
+  getTestsForPlan: async (planId: string) => {
+    try {
+      const response = await apiClient.get(`/tests/plan/${planId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching tests for plan:', error);
+      throw error;
+    }
+  },
+
+  getUserAvailableTests: async (userId: string, planId: string) => {
+    try {
+      const response = await apiClient.get(`/tests/user/${userId}/plan/${planId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching available tests:', error);
+      throw error;
+    }
+  },
+
+  uploadFile: async (formData: FormData) => {
+    try {
+      const response = await apiClient.post('/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      throw error;
+    }
+  },
+
+  getTests: async () => {
+    try {
+      const response = await apiClient.get('/tests');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching tests:', error);
+      throw error;
+    }
+  },
+
+  updateTest: async (testId: string, testData: Partial<Test>) => {
+    try {
+      const response = await apiClient.put(`/tests/${testId}`, testData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating test:', error);
+      throw error;
+    }
+  },
+
+  deleteTest: async (testId: string) => {
+    try {
+      const response = await apiClient.delete(`/tests/${testId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting test:', error);
+      throw error;
+    }
+  },
+
+  saveTestHistory: async (testHistoryData: {
+    userId: string;
+    testId: string;
+    score: number;
+    totalQuestions: number;
+    percentage: number;
+    completedAt: string;
+  }) => {
+    try {
+      const response = await apiClient.post('/test-history', testHistoryData);
+      return response.data;
+    } catch (error) {
+      console.error('Error saving test history:', error);
+      throw error;
+    }
+  },
+
+  getUserTestHistory: async (userId: string) => {
+    try {
+      const response = await apiClient.get(`/test-history/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user test history:', error);
+      throw error;
+    }
+  },
+
+  getTestsByPlan: async (planId: string) => {
+    try {
+      console.log('API: Fetching tests for Plan ID:', planId);
+      
+      const response = await apiClient.get(`/tests-by-plan/${planId}`);
+      
+      console.log('API: Received Tests:', JSON.stringify(response.data, null, 2));
+      
+      return response.data;
+    } catch (error) {
+      console.error('API: Error fetching tests for plan:', error);
+      
+      // Detailed error logging
+      if (error.response) {
+        console.error('API: Response Error Details', {
+          status: error.response.status,
+          data: JSON.stringify(error.response.data, null, 2),
+          headers: error.response.headers
+        });
+      }
+      
+      const errorMessage = error.response?.data?.message || 
+                           error.message || 
+                           'Error al obtener los tests';
+      
+      throw new Error(errorMessage);
+    }
+  },
+
+  getPlanById: async (planId: string) => {
+    try {
+      const response = await apiClient.get(`/plan/${planId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching plan details:', error);
+      throw error;
+    }
+  },
+
+  saveTestResult: async (testResult: {
+    testId: string;
+    userId: string;
+    score: number;
+    totalQuestions: number;
+    correctAnswers: number;
+    selectedAnswers: number[];
+    completedAt: string;
+  }) => {
+    try {
+      const response = await apiClient.post('/test-result', testResult);
+      return response.data;
+    } catch (error) {
+      console.error('Error saving test result:', error);
+      throw error;
+    }
+  },
+
+  getUserTestHistory: async (userId?: string) => {
+    try {
+      if (!userId) throw new Error('User ID is required');
+      
+      const response = await apiClient.get(`/user-test-history/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user test history:', error);
+      throw error;
+    }
+  },
 };
 
 // Also export as default for alternative import styles

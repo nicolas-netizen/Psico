@@ -28,5 +28,19 @@
     "featured": false,
     "createdAt": "2025-01-08T19:37:17.502Z",
     "updatedAt": "2025-01-08T19:37:25.312Z"
+  },
+  {
+    "id": "plan-1736368606622",
+    "name": "Prem",
+    "price": 300,
+    "features": [
+      "Hola",
+      "Chau"
+    ],
+    "description": "",
+    "recommended": true,
+    "featured": true,
+    "createdAt": "2025-01-08T20:37:05.628Z",
+    "updatedAt": "2025-01-08T20:37:40.364Z"
   }
 ]

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useGlobalAuth } from './hooks/useGlobalAuth';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Page imports
 import Login from './components/auth/Login';
@@ -31,59 +32,61 @@ const DashboardRouter = () => {
   }
 
   return (
-    <Routes>
-      <Route 
-        path="/dashboard" 
-        element={
-          <ProtectedRoute>
-            {userRole === 'admin' ? <AdminDashboard /> : <Dashboard />}
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/precios" 
-        element={
-          <ProtectedRoute>
-            <Precios />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/recursos" 
-        element={
-          <ProtectedRoute>
-            <Resources />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/plans" 
-        element={
-          <ProtectedRoute>
-            <Plans />
-          </ProtectedRoute>
-        } 
-      />
-      {userRole === 'admin' && (
+    <ErrorBoundary>
+      <Routes>
         <Route 
-          path="/admin" 
+          path="/dashboard" 
           element={
             <ProtectedRoute>
-              <AdminDashboard />
+              {userRole === 'admin' ? <AdminDashboard /> : <Dashboard />}
             </ProtectedRoute>
           } 
         />
-      )}
-      <Route 
-        path="/tests" 
-        element={
-          <ProtectedRoute>
-            <TestsPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route 
+          path="/precios" 
+          element={
+            <ProtectedRoute>
+              <Precios />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/recursos" 
+          element={
+            <ProtectedRoute>
+              <Resources />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/plans" 
+          element={
+            <ProtectedRoute>
+              <Plans />
+            </ProtectedRoute>
+          } 
+        />
+        {userRole === 'admin' && (
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
+        )}
+        <Route 
+          path="/tests" 
+          element={
+            <ProtectedRoute>
+              <TestsPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ErrorBoundary>
   );
 };
 
@@ -95,12 +98,14 @@ const App: React.FC = () => {
         <div className="flex flex-col min-h-screen">
           <Navbar />
           <main className="flex-grow">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="*" element={<DashboardRouter />} />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="*" element={<DashboardRouter />} />
+              </Routes>
+            </ErrorBoundary>
           </main>
           <Footer />
           <ToastContainer 

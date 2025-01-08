@@ -3,13 +3,13 @@
     "id": "admin-1",
     "email": "admin@chapiri.com",
     "name": "Admin",
-    "password": "$2a$10$Q79BMn/pkP5YSDMkUQaFv.CJJXuzT8fFusc5edarn3TOeV04PQII.",
+    "password": "$2a$10$DScARQoKE6Pa4tEOtXM6iOyGnGnNPqrFpLfnYJAabp6LyJDyXd8Rq",
     "role": "admin",
-    "createdAt": "2025-01-08T19:43:16.586Z",
+    "createdAt": "2025-01-08T20:27:19.961Z",
     "subscription": {
       "planId": "plan-1",
       "planName": "Administrador",
-      "purchaseDate": "2025-01-08T19:43:16.587Z",
+      "purchaseDate": "2025-01-08T20:27:19.963Z",
       "features": [
         "Acceso total al sistema"
       ]
@@ -25,9 +25,27 @@
     "subscription": {
       "planId": "plan-1736365177702",
       "planName": "God",
-      "purchaseDate": "2025-01-08T19:40:28.012Z",
+      "purchaseDate": "2025-01-08T20:23:04.138Z",
       "features": [
-        "Poder+1000"
+        "Poder+1000",
+        "Poder +2''0000"
+      ]
+    }
+  },
+  {
+    "id": "1d9f7f18-59af-4b16-a65d-0633ab10cbd2",
+    "email": "nico2005coki@gmail.com",
+    "name": "GuKu 111",
+    "password": "$2a$10$UaE7avWaoogi2e.XqBrdCOLT2eFnowaWpgAezlViuBnPtNZzbBxAu",
+    "role": "user",
+    "createdAt": "2025-01-08T20:36:08.914Z",
+    "subscription": {
+      "planId": "plan-1736365177702",
+      "planName": "God",
+      "purchaseDate": "2025-01-08T20:53:33.234Z",
+      "features": [
+        "Poder+1000",
+        "Poder +2''0000"
       ]
     }
   }

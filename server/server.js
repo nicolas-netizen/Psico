@@ -276,45 +276,63 @@ app.post('/admin/tests', (req, res) => {
 });
 
 // Endpoint para crear un nuevo plan (Admin)
-app.post('/admin/planes', (req, res) => {
+app.post('/planes', (req, res) => {
   try {
-    const { name, price, description, features = [] } = req.body;
+    const { name, price, features, description, recommended, featured } = req.body;
+    
+    console.log('Received plan data:', req.body);
 
     // Validar datos de entrada
-    if (!name || price === undefined || !description) {
-      return res.status(400).json({ message: 'Datos incompletos para crear un plan' });
+    if (!name || !price) {
+      return res.status(400).json({ message: 'Nombre y precio son requeridos' });
     }
 
-    // Leer los planes existentes
-    const planes = readJsonFile(PLANES_FILE);
+    let planes = readJsonFile(PLANES_FILE);
     
-    // Generar un nuevo ID incremental
-    const newId = planes.length > 0 
-      ? Math.max(...planes.map(p => p.id)) + 1 
-      : 1;
+    // Generar un ID único si no se proporciona
+    const newPlanId = req.body.id || `plan-${Date.now()}`;
 
+    // Verificar si ya existe un plan con el mismo ID
+    const existingPlanIndex = planes.findIndex(p => p.id === newPlanId);
+
+    // Crear el nuevo plan
     const newPlan = {
-      id: newId,
+      id: newPlanId,
       name,
-      price: Number(price),
-      description,
-      features,
+      price: parseFloat(price),
+      features: features || [],
+      description: description || '',
+      recommended: recommended || false,
+      featured: featured || false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    planes.push(newPlan);
+    // Si ya existe, reemplazar; si no, agregar
+    if (existingPlanIndex !== -1) {
+      planes[existingPlanIndex] = newPlan;
+    } else {
+      planes.push(newPlan);
+    }
 
-    // Guardar los planes actualizados
+    // Ordenar planes por fecha de creación (más recientes primero)
+    planes.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    // Eliminar duplicados basados en ID
+    planes = planes.filter((plan, index, self) => 
+      index === self.findIndex(p => p.id === plan.id)
+    );
+
     writeJsonFile(PLANES_FILE, planes);
-    
-    res.status(201).json({ 
-      message: 'Plan creado exitosamente', 
-      plan: newPlan 
-    });
+
+    console.log('Plan created successfully:', newPlan);
+
+    res.status(201).json(newPlan);
   } catch (error) {
     console.error('Error creating plan:', error);
-    res.status(500).json({ message: 'Error al crear el plan' });
+    res.status(500).json({ message: 'Error al crear el plan', error: error.toString() });
   }
 });
 
@@ -392,61 +410,6 @@ app.get('/planes', (req, res) => {
   } catch (error) {
     console.error('Error fetching plans:', error);
     res.status(500).json({ message: 'Error al obtener los planes' });
-  }
-});
-
-app.post('/planes', (req, res) => {
-  try {
-    const { name, price, features, description, recommended, featured } = req.body;
-    
-    console.log('Received plan data:', req.body);
-
-    // Validar datos de entrada
-    if (!name || !price) {
-      return res.status(400).json({ message: 'Nombre y precio son requeridos' });
-    }
-
-    let planes = readJsonFile(PLANES_FILE);
-    
-    // Generar un ID único si no se proporciona
-    const newPlanId = req.body.id || `plan-${Date.now()}`;
-
-    // Verificar si ya existe un plan con el mismo ID
-    const existingPlanIndex = planes.findIndex(p => p.id === newPlanId);
-
-    // Crear el nuevo plan
-    const newPlan = {
-      id: newPlanId,
-      name,
-      price: parseFloat(price),
-      features: features || [],
-      description: description || '',
-      recommended: recommended || false,
-      featured: featured || false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    // Si ya existe, reemplazar; si no, agregar
-    if (existingPlanIndex !== -1) {
-      planes[existingPlanIndex] = newPlan;
-    } else {
-      planes.push(newPlan);
-    }
-
-    // Eliminar duplicados basados en ID
-    planes = planes.filter((plan, index, self) => 
-      index === self.findIndex(p => p.id === plan.id)
-    );
-
-    writeJsonFile(PLANES_FILE, planes);
-
-    console.log('Plan created successfully:', newPlan);
-
-    res.status(201).json(newPlan);
-  } catch (error) {
-    console.error('Error creating plan:', error);
-    res.status(500).json({ message: 'Error al crear el plan', error: error.toString() });
   }
 });
 

@@ -9,15 +9,25 @@ const PlansManager = () => {
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchPlans = async () => {
       try {
+        setLoading(true);
         const fetchedPlans = await api.getPlans();
-        setPlans(fetchedPlans);
+        
+        // Sort plans to ensure consistent order
+        const sortedPlans = fetchedPlans.sort((a, b) => 
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
+        
+        setPlans(sortedPlans);
+        setLoading(false);
       } catch (err) {
         console.error('Error fetching plans:', err);
-        setError('No se pudieron cargar los planes');
+        toast.error('No se pudieron cargar los planes');
+        setLoading(false);
       }
     };
     fetchPlans();
@@ -68,27 +78,16 @@ const PlansManager = () => {
         // New plan
         savedPlan = await api.createPlan(updatedPlan);
         
-        // Replace temporary plan with saved plan
-        const newPlans = plans
-          .filter(p => !p.id.startsWith('plan-'))
-          .concat(savedPlan.plan);
-        
-        setPlans(newPlans);
+        // Fetch all plans to ensure we have the full list
+        const allPlans = await api.getPlans();
+        setPlans(allPlans);
       } else {
         // Existing plan
         savedPlan = await api.updatePlan(plan.id.toString(), updatedPlan);
         
-        const newPlans = plans.map(p => 
-          p.id === plan.id ? savedPlan.plan : p
-        );
-        
-        // Remove any duplicates
-        const uniquePlans = newPlans.filter(
-          (plan, index, self) => 
-            self.findIndex(p => p.id === plan.id) === index
-        );
-        
-        setPlans(uniquePlans);
+        // Fetch all plans to ensure we have the full list
+        const allPlans = await api.getPlans();
+        setPlans(allPlans);
       }
 
       setIsModalOpen(false);

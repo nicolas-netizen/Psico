@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { Book, Clock, Award, Settings } from 'lucide-react';
-import { useGlobalAuth } from '../../hooks/useGlobalAuth';
+import { useAuth } from '../../context/AuthContext';
 import AdminDashboard from '../../pages/AdminDashboard';
 
 const UserDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('tests');
-  const { userRole, userEmail } = useGlobalAuth();
-  const userPlan = localStorage.getItem('userPlan') || 'basic';
+  const { user, isAuthenticated } = useAuth();
+
+  // Determine user's plan from subscription
+  const userPlan = user?.subscription?.planName?.toLowerCase() || 'básico';
 
   // Si el usuario es admin, mostrar el panel de administración
-  if (userRole === 'admin') {
+  if (user?.role === 'admin') {
     return <AdminDashboard />;
   }
 
@@ -37,7 +39,7 @@ const UserDashboard: React.FC = () => {
       category: 'Psicología',
       difficulty: 'Intermedio',
       duration: '30 min',
-      requiredPlan: 'basic',
+      requiredPlan: 'básico',
     },
     {
       id: 2,
@@ -50,8 +52,16 @@ const UserDashboard: React.FC = () => {
   ];
 
   const canAccessTest = (requiredPlan: string) => {
-    if (requiredPlan === 'basic') return true;
-    if (requiredPlan === 'premium' && userPlan === 'premium') return true;
+    // Normalize plan names
+    const currentPlan = userPlan.toLowerCase();
+    const requiredPlanNormalized = requiredPlan.toLowerCase();
+
+    // Basic plan can access basic tests
+    if (requiredPlanNormalized === 'básico') return true;
+
+    // Premium plan can access all tests
+    if (currentPlan === 'premium') return true;
+
     return false;
   };
 
@@ -62,10 +72,10 @@ const UserDashboard: React.FC = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Mi Panel</h1>
           <p className="mt-2 text-gray-600">
-            Bienvenido, {userEmail}
+            Bienvenido, {user?.name || user?.email}
           </p>
           <div className="mt-4 inline-block px-4 py-2 bg-[#91c26a] bg-opacity-10 rounded-full text-[#6ea844] font-medium">
-            {userPlan === 'premium' ? 'Plan Premium' : 'Plan Básico'}
+            {userPlan || 'Plan Básico'}
           </div>
         </div>
 
@@ -193,8 +203,7 @@ const UserDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="px-2 py-1 text-sm text-[#6ea844] bg-[#91c26a] bg-opacity-10 rounded-full">
-                            {test.score}%
-                          </span>
+                            {test.score}%</span>
                         </td>
                       </tr>
                     ))}

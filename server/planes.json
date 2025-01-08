@@ -1,0 +1,31 @@
+[
+  {
+    "id": "plan-1",
+    "name": "Básico",
+    "price": 10,
+    "features": [
+      "Acceso a tests básicos",
+      "Límite de 5 tests por mes",
+      "Soporte por correo electrónico",
+      "a"
+    ],
+    "description": "",
+    "recommended": true,
+    "featured": false,
+    "createdAt": "2025-01-08T19:37:17.502Z",
+    "updatedAt": "2025-01-08T19:37:25.312Z"
+  },
+  {
+    "id": "plan-1736365177702",
+    "name": "God",
+    "price": 200,
+    "features": [
+      "Poder+1000"
+    ],
+    "description": "",
+    "recommended": false,
+    "featured": false,
+    "createdAt": "2025-01-08T19:39:50.670Z",
+    "updatedAt": "2025-01-08T19:40:07.224Z"
+  }
+]

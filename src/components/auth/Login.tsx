@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
-import { useGlobalAuth } from '../../hooks/useGlobalAuth';
+import { useAuth } from '../../context/AuthContext';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -10,7 +10,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useGlobalAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,6 +24,7 @@ const Login = () => {
       }
 
       await login(email, password);
+      navigate('/dashboard');  // Explicitly navigate to dashboard
     } catch (err: any) {
       console.error('Error de login:', err);
       setError(err.message || 'Error al iniciar sesión. Por favor intente nuevamente.');

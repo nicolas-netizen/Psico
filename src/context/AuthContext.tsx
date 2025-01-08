@@ -1,129 +1,83 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from '../types/User';
+import type { Plan } from '../types/Plan';
+import type { Test, UserAnswer, TestResult } from '../types/Test';
+import api from '../services/api';
 
-interface AuthContextType {
+export interface AuthContextType {
   isAuthenticated: boolean;
+  user: User | null;
   userRole: string;
-  userEmail: string | null;
-  userPlan: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
+  getAvailableTests: () => Promise<Test[]>;
+  getTestById: (testId: string) => Promise<Test>;
+  submitTestAnswers: (testId: string, answers: UserAnswer[]) => Promise<TestResult>;
+  getUserTestHistory: () => Promise<TestResult[]>;
+  getPlans: () => Promise<Plan[]>;
+  purchasePlan: (planId: string) => Promise<void>;
+  updateUser: (updatedUser: Partial<User>) => void;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState('user');
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userPlan, setUserPlan] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<string>('guest');
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Verificar si hay un usuario guardado en localStorage
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
-      const user = JSON.parse(savedUser);
-      setIsAuthenticated(true);
-      setUserRole(user.role || 'user');
-      setUserEmail(user.email);
-      setUserPlan(user.plan || null);
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setIsAuthenticated(true);
+        setUser(parsedUser);
+        setUserRole(parsedUser.role || 'guest');
+      } catch (error) {
+        console.error('Error parsing saved user:', error);
+        localStorage.removeItem('currentUser');
+      }
     }
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
-      // Verificar admin predeterminado
-      if (email === 'admin@chapiri.com' && password === 'admin123') {
-        const adminUser = {
-          email: 'admin@chapiri.com',
-          password: 'admin123',
-          role: 'admin',
-          plan: null,
-          name: 'Admin'
-        };
-        localStorage.setItem('currentUser', JSON.stringify(adminUser));
-        setIsAuthenticated(true);
-        setUserRole('admin');
-        setUserEmail(adminUser.email);
-        setUserPlan(null);
-        navigate('/dashboard', { replace: true });
-        return;
-      }
-
-      // Obtener usuarios registrados
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const user = users.find((u: any) => u.email === email && u.password === password);
-
-      if (!user) {
-        throw new Error('Credenciales inválidas');
-      }
-
-      // Guardar usuario actual en localStorage
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      setIsAuthenticated(true);
-      setUserRole(user.role);
-      setUserEmail(user.email);
-      setUserPlan(user.plan);
+      const loggedInUser = await api.login(email, password);
       
-      // Redirigir al dashboard después del login
-      navigate('/dashboard', { replace: true });
+      localStorage.setItem('currentUser', JSON.stringify(loggedInUser));
+      
+      setIsAuthenticated(true);
+      setUser(loggedInUser);
+      setUserRole(loggedInUser.role || 'guest');
+      
+      navigate('/dashboard');
     } catch (error) {
+      setIsAuthenticated(false);
+      setUser(null);
+      setUserRole('guest');
       throw error;
     }
   };
 
   const register = async (email: string, password: string, name: string) => {
     try {
-      // Verificar que no sea el email del admin
-      if (email === 'admin@chapiri.com') {
-        throw new Error('Este email no está disponible');
-      }
-
-      // Obtener usuarios existentes
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      const registeredUser = await api.register(email, password, name);
       
-      // Verificar si el usuario ya existe
-      if (users.some((u: any) => u.email === email)) {
-        throw new Error('El email ya está registrado');
-      }
-
-      // Crear nuevo usuario
-      const newUser = {
-        email,
-        password,
-        name,
-        role: 'user',
-        plan: 'basic',
-        createdAt: new Date().toISOString()
-      };
-
-      // Agregar a la lista de usuarios
-      users.push(newUser);
-      localStorage.setItem('users', JSON.stringify(users));
-
-      // Guardar usuario actual
-      localStorage.setItem('currentUser', JSON.stringify(newUser));
+      localStorage.setItem('currentUser', JSON.stringify(registeredUser));
       
-      // Actualizar estado
       setIsAuthenticated(true);
-      setUserRole('user');
-      setUserEmail(email);
-      setUserPlan('basic');
+      setUser(registeredUser);
+      setUserRole(registeredUser.role || 'guest');
       
-      // Redirigir al dashboard después del registro
-      navigate('/dashboard', { replace: true });
+      navigate('/dashboard');
     } catch (error) {
+      setIsAuthenticated(false);
+      setUser(null);
+      setUserRole('guest');
       throw error;
     }
   };
@@ -131,23 +85,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     localStorage.removeItem('currentUser');
     setIsAuthenticated(false);
-    setUserRole('user');
-    setUserEmail(null);
-    setUserPlan(null);
-    // Redirigir al home después del logout
-    navigate('/', { replace: true });
+    setUser(null);
+    setUserRole('guest');
+    navigate('/login');
+  };
+
+  const getAvailableTests = async () => {
+    return await api.getAvailableTests();
+  };
+
+  const getTestById = async (testId: string) => {
+    return await api.getTestById(testId);
+  };
+
+  const submitTestAnswers = async (testId: string, answers: UserAnswer[]) => {
+    return await api.submitTestAnswers(testId, answers);
+  };
+
+  const getUserTestHistory = async () => {
+    return await api.getUserTestHistory();
+  };
+
+  const getPlans = async () => {
+    return await api.getPlans();
+  };
+
+  const purchasePlan = async (planId: string) => {
+    const updatedUser = await api.purchasePlan(planId);
+    setUser(updatedUser);
+  };
+
+  const updateUser = (updatedUser: Partial<User>) => {
+    if (user) {
+      const newUser = { ...user, ...updatedUser };
+      setUser(newUser);
+      localStorage.setItem('currentUser', JSON.stringify(newUser));
+    }
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        isAuthenticated,
-        userRole,
-        userEmail,
-        userPlan,
-        login,
-        register,
+    <AuthContext.Provider 
+      value={{ 
+        isAuthenticated, 
+        user, 
+        userRole, 
+        login, 
+        register, 
         logout,
+        getAvailableTests,
+        getTestById,
+        submitTestAnswers,
+        getUserTestHistory,
+        getPlans,
+        purchasePlan,
+        updateUser
       }}
     >
       {children}
@@ -155,4 +146,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export default AuthContext;
+export const useAuth = () => {
+  const context = React.useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+const defaultAuthContext: AuthContextType = {
+  isAuthenticated: false,
+  user: null,
+  userRole: 'guest',
+  login: async () => {},
+  register: async () => {},
+  logout: () => {},
+  getAvailableTests: async () => [],
+  getTestById: async () => ({} as Test),
+  submitTestAnswers: async () => ({} as TestResult),
+  getUserTestHistory: async () => [],
+  getPlans: async () => [],
+  purchasePlan: async () => {},
+  updateUser: () => {}
+};
+
+export default defaultAuthContext;

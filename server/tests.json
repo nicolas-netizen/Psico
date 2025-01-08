@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "title": "Test Matemáticas",
+    "description": "Evaluación básica de matemáticas.",
+    "fileUrl": "/tests/matematicas.pdf",
+    "plans": [
+      1,
+      2
+    ]
+  },
+  {
+    "id": 2,
+    "title": "Test Física Avanzada",
+    "description": "Test avanzado para estudiantes de física.",
+    "fileUrl": "/tests/fisica.pdf",
+    "plans": [
+      2
+    ]
+  },
+  {
+    "id": 3,
+    "title": "Matematica",
+    "description": "Test",
+    "fileUrl": "/tests/1736186485306.pdf",
+    "plans": [
+      "plan-1736186199450"
+    ]
+  }
+]

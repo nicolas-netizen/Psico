@@ -1,11 +1,9 @@
 export interface Plan {
   id: string;
   name: string;
-  price: string;
+  description: string;
+  price: number;
   features: string[];
   recommended?: boolean;
   featured?: boolean;
-  description?: string;
-  createdAt: string;
-  updatedAt: string;
 }

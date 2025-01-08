@@ -1,23 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Star, Check, X } from 'lucide-react';
 import type { Plan } from '../../types/Plan';
+import api from '../../services/api';
+import toast from 'react-hot-toast'; // Import toast
 
 const PlansManager = () => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedPlans = localStorage.getItem('plans');
-    if (savedPlans) {
-      setPlans(JSON.parse(savedPlans));
-    }
+    const fetchPlans = async () => {
+      try {
+        const fetchedPlans = await api.getPlans();
+        setPlans(fetchedPlans);
+      } catch (err) {
+        console.error('Error fetching plans:', err);
+        setError('No se pudieron cargar los planes');
+      }
+    };
+    fetchPlans();
   }, []);
-
-  const savePlans = (newPlans: Plan[]) => {
-    localStorage.setItem('plans', JSON.stringify(newPlans));
-    setPlans(newPlans);
-  };
 
   const handleAddPlan = () => {
     const newPlan: Plan = {
@@ -37,38 +41,103 @@ const PlansManager = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeletePlan = (planId: string) => {
+  const handleDeletePlan = async (planId: string) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este plan?')) {
-      const newPlans = plans.filter(p => p.id !== planId);
-      savePlans(newPlans);
+      try {
+        await api.deletePlan(planId);
+        const newPlans = plans.filter(p => p.id !== planId);
+        setPlans(newPlans);
+      } catch (err) {
+        console.error('Error deleting plan:', err);
+        setError('No se pudo eliminar el plan');
+      }
     }
   };
 
-  const handleSavePlan = (plan: Plan) => {
-    const newPlans = editingPlan?.id
-      ? plans.map(p => (p.id === editingPlan.id ? plan : p))
-      : [...plans, plan];
-    savePlans(newPlans);
-    setIsModalOpen(false);
-    setEditingPlan(null);
+  const handleSavePlan = async (plan: Plan) => {
+    try {
+      const updatedPlan = {
+        ...plan,
+        price: parseFloat(plan.price.toString()),
+        features: plan.features.filter(f => f.trim() !== ''),
+        updatedAt: new Date().toISOString(),
+      };
+
+      let savedPlan;
+      if (plan.id.startsWith('plan-')) {
+        // New plan
+        savedPlan = await api.createPlan(updatedPlan);
+        
+        // Replace temporary plan with saved plan
+        const newPlans = plans
+          .filter(p => !p.id.startsWith('plan-'))
+          .concat(savedPlan.plan);
+        
+        setPlans(newPlans);
+      } else {
+        // Existing plan
+        savedPlan = await api.updatePlan(plan.id.toString(), updatedPlan);
+        
+        const newPlans = plans.map(p => 
+          p.id === plan.id ? savedPlan.plan : p
+        );
+        
+        // Remove any duplicates
+        const uniquePlans = newPlans.filter(
+          (plan, index, self) => 
+            self.findIndex(p => p.id === plan.id) === index
+        );
+        
+        setPlans(uniquePlans);
+      }
+
+      setIsModalOpen(false);
+      setEditingPlan(null);
+      toast.success('Plan guardado exitosamente');
+    } catch (err) {
+      console.error('Error saving plan:', err);
+      toast.error('No se pudo guardar el plan');
+      setError('No se pudo guardar el plan');
+    }
   };
 
-  const handleToggleFeature = (planId: string, feature: 'featured' | 'recommended') => {
-    const newPlans = plans.map(plan => {
-      if (plan.id === planId) {
-        return {
-          ...plan,
-          [feature]: !plan[feature],
-          updatedAt: new Date().toISOString(),
-        };
+  const handleToggleFeature = async (planId: string, feature: 'featured' | 'recommended') => {
+    try {
+      const planToUpdate = plans.find(p => p.id === planId);
+      if (!planToUpdate) {
+        toast.error('Plan no encontrado');
+        return;
       }
-      return plan;
-    });
-    savePlans(newPlans);
+
+      const updatedPlan = {
+        ...planToUpdate,
+        [feature]: !planToUpdate[feature],
+        updatedAt: new Date().toISOString()
+      };
+
+      const response = await api.updatePlan(planId, updatedPlan);
+      
+      const newPlans = plans.map(p => 
+        p.id === planId ? response.plan : p
+      );
+      
+      setPlans(newPlans);
+      toast.success(`Plan ${feature === 'featured' ? 'destacado' : 'recomendado'} actualizado`);
+    } catch (err) {
+      console.error('Error toggling feature:', err);
+      toast.error(`No se pudo actualizar el plan: ${err.message}`);
+    }
   };
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
+      {/* Error Notification */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md mb-4">
+          {error}
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Gestión de Planes</h2>
         <button
@@ -112,7 +181,7 @@ const PlansManager = () => {
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500">
                   <ul className="list-disc list-inside">
-                    {plan.features.map((feature, index) => (
+                    {plan.features?.map((feature, index) => (
                       <li key={index}>{feature}</li>
                     ))}
                   </ul>
@@ -171,7 +240,7 @@ const PlansManager = () => {
           <div className="bg-white rounded-lg max-w-2xl w-full p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900">
-                {editingPlan?.id ? 'Editar Plan' : 'Nuevo Plan'}
+                {editingPlan?.id.startsWith('plan-') ? 'Nuevo Plan' : 'Editar Plan'}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -185,10 +254,7 @@ const PlansManager = () => {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (editingPlan) {
-                  handleSavePlan({
-                    ...editingPlan,
-                    updatedAt: new Date().toISOString(),
-                  });
+                  handleSavePlan(editingPlan);
                 }
               }}
               className="space-y-4"
@@ -200,12 +266,10 @@ const PlansManager = () => {
                 <input
                   type="text"
                   value={editingPlan?.name || ''}
-                  onChange={(e) =>
-                    setEditingPlan(prev =>
-                      prev ? { ...prev, name: e.target.value } : null
-                    )
+                  onChange={(e) => 
+                    setEditingPlan(prev => prev ? { ...prev, name: e.target.value } : null)
                   }
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#91c26a] focus:border-[#91c26a]"
                   required
                 />
               </div>
@@ -215,15 +279,15 @@ const PlansManager = () => {
                   Precio
                 </label>
                 <input
-                  type="text"
+                  type="number"
                   value={editingPlan?.price || ''}
-                  onChange={(e) =>
-                    setEditingPlan(prev =>
-                      prev ? { ...prev, price: e.target.value } : null
-                    )
+                  onChange={(e) => 
+                    setEditingPlan(prev => prev ? { ...prev, price: e.target.value } : null)
                   }
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#91c26a] focus:border-[#91c26a]"
                   required
+                  min="0"
+                  step="0.01"
                 />
               </div>
 
@@ -231,89 +295,56 @@ const PlansManager = () => {
                 <label className="block text-sm font-medium text-gray-700">
                   Características
                 </label>
-                {editingPlan?.features.map((feature, index) => (
-                  <div key={index} className="flex mt-2">
+                {editingPlan?.features?.map((feature, index) => (
+                  <div key={index} className="flex items-center mt-1">
                     <input
                       type="text"
                       value={feature}
-                      onChange={(e) => {
-                        const newFeatures = [...(editingPlan?.features || [])];
-                        newFeatures[index] = e.target.value;
-                        setEditingPlan(prev =>
-                          prev ? { ...prev, features: newFeatures } : null
-                        );
-                      }}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-                      required
+                      onChange={(e) => 
+                        setEditingPlan(prev => {
+                          if (!prev) return null;
+                          const newFeatures = [...prev.features];
+                          newFeatures[index] = e.target.value;
+                          return { ...prev, features: newFeatures };
+                        })
+                      }
+                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#91c26a] focus:border-[#91c26a]"
+                      placeholder="Característica"
                     />
                     <button
                       type="button"
-                      onClick={() => {
-                        const newFeatures = editingPlan?.features.filter(
-                          (_, i) => i !== index
-                        );
-                        setEditingPlan(prev =>
-                          prev ? { ...prev, features: newFeatures } : null
-                        );
-                      }}
-                      className="ml-2 text-red-600 hover:text-red-900"
+                      onClick={() => 
+                        setEditingPlan(prev => {
+                          if (!prev) return null;
+                          const newFeatures = prev.features.filter((_, i) => i !== index);
+                          return { ...prev, features: newFeatures };
+                        })
+                      }
+                      className="ml-2 text-red-500 hover:text-red-700"
                     >
-                      <X className="h-5 w-5" />
+                      <Trash2 className="h-5 w-5" />
                     </button>
                   </div>
                 ))}
                 <button
                   type="button"
-                  onClick={() =>
-                    setEditingPlan(prev =>
-                      prev
-                        ? {
-                            ...prev,
-                            features: [...prev.features, ''],
-                          }
-                        : null
+                  onClick={() => 
+                    setEditingPlan(prev => prev 
+                      ? { ...prev, features: [...prev.features, ''] } 
+                      : null
                     )
                   }
-                  className="mt-2 text-sm text-[#91c26a] hover:text-[#82b35b]"
+                  className="mt-2 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-[#91c26a] bg-[#91c26a]/10 hover:bg-[#91c26a]/20 focus:outline-none"
                 >
-                  + Agregar característica
+                  <Plus className="h-4 w-4 mr-1" /> Añadir Característica
                 </button>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={editingPlan?.featured || false}
-                    onChange={(e) =>
-                      setEditingPlan(prev =>
-                        prev ? { ...prev, featured: e.target.checked } : null
-                      )
-                    }
-                    className="rounded border-gray-300 text-[#91c26a] focus:ring-[#91c26a]"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Destacado</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={editingPlan?.recommended || false}
-                    onChange={(e) =>
-                      setEditingPlan(prev =>
-                        prev ? { ...prev, recommended: e.target.checked } : null
-                      )
-                    }
-                    className="rounded border-gray-300 text-[#91c26a] focus:ring-[#91c26a]"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Recomendado</span>
-                </label>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="pt-4 flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Cancelar
                 </button>
@@ -321,7 +352,7 @@ const PlansManager = () => {
                   type="submit"
                   className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#91c26a] hover:bg-[#82b35b]"
                 >
-                  Guardar
+                  Guardar Plan
                 </button>
               </div>
             </form>

@@ -1,7 +1,12 @@
 export interface User {
+  id: string;
+  name: string;
   email: string;
-  password: string;
-  role: 'user' | 'admin';
-  plan: 'basic' | 'premium' | 'annual';
-  createdAt: string;
+  role: 'admin' | 'user' | 'guest';
+  subscription?: {
+    planId: string;
+    startDate: string;
+    endDate: string;
+  };
+  testHistory?: string[];
 }

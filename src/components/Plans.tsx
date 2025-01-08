@@ -1,99 +1,110 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { CheckCircle2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useGlobalAuth } from '../hooks/useGlobalAuth';
-import { Plan } from '../types/plan';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { Plan } from '../types/Plan';
+import { toast } from 'react-toastify';
+import { CheckCircle2, XCircle, StarIcon } from 'lucide-react';
 
-const Plans = () => {
-  const navigate = useNavigate();
-  const { isAuthenticated } = useGlobalAuth();
+const Plans: React.FC<{ showFeaturedOnly?: boolean }> = ({ showFeaturedOnly = false }) => {
+  const { getPlans, purchasePlan, user, updateUser } = useAuth();
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Obtener los planes del estado global (localStorage)
-  const plans = JSON.parse(localStorage.getItem('plans') || '[]') as Plan[];
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const fetchedPlans = await getPlans();
+        // Filter plans if showFeaturedOnly is true
+        const displayPlans = showFeaturedOnly 
+          ? fetchedPlans.filter(plan => plan.recommended || plan.featured)
+          : fetchedPlans;
+        
+        setPlans(displayPlans);
+        setLoading(false);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+        setError(errorMessage);
+        toast.error(`No se pudieron cargar los planes: ${errorMessage}`);
+        setLoading(false);
+      }
+    };
 
-  const handlePlanClick = (planName: string) => {
-    if (!isAuthenticated) {
-      navigate('/register');
-    } else {
-      console.log(`Selected plan: ${planName}`);
+    fetchPlans();
+  }, [showFeaturedOnly]);
+
+  const handlePurchasePlan = async (planId: string) => {
+    try {
+      await purchasePlan(planId);
+      toast.success('Plan comprado exitosamente');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      toast.error(`Error al comprar el plan: ${errorMessage}`);
     }
   };
 
-  if (plans.length === 0) {
-    return (
-      <div className="py-12 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <p>No hay planes disponibles</p>
-          </div>
-        </div>
-      </div>
-    );
+  if (loading) {
+    return <div>Cargando planes...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
   }
 
   return (
-    <section className="py-12 bg-gray-50" id="planes">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mt-12 space-y-4 sm:mt-16 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-6 lg:max-w-4xl lg:mx-auto xl:max-w-none xl:mx-0 xl:grid-cols-3">
-          {plans.map((plan, index) => (
-            <motion.div
-              key={plan.id}
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              className={`rounded-lg shadow-lg divide-y divide-gray-200 ${
-                plan.recommended
-                  ? 'border-2 border-[#91c26a] relative'
-                  : 'border border-gray-200'
-              }`}
-            >
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold text-center mb-8">Elige tu Plan</h1>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {plans.map((plan) => (
+          <div 
+            key={plan.id} 
+            className={`
+              bg-white shadow-lg rounded-lg p-6 transform transition-all hover:scale-105 
+              ${plan.recommended ? 'border-4 border-green-500' : ''}
+              relative
+            `}
+          >
+            {(plan.recommended || plan.featured) && (
+              <div className="absolute top-0 right-0 m-2 p-1 bg-green-500 text-white rounded-full">
+                <StarIcon size={20} className="text-white" />
+              </div>
+            )}
+            <h2 className="text-2xl font-semibold mb-4">
+              {plan.name}
               {plan.recommended && (
-                <div className="absolute top-0 right-0 -translate-y-1/2 px-3 py-1 bg-[#91c26a] text-white text-sm font-medium rounded-full transform translate-x-2">
-                  Más popular
-                </div>
+                <span className="ml-2 text-sm text-green-600 font-normal">
+                  (Recomendado)
+                </span>
               )}
-              <div className="p-6">
-                <h2 className="text-2xl font-semibold text-gray-900">{plan.name}</h2>
-                <p className="mt-4">
-                  <span className="text-4xl font-extrabold text-gray-900">
-                    ${plan.price}
-                  </span>
-                  <span className="text-base font-medium text-gray-500">/mes</span>
-                </p>
-                <button
-                  onClick={() => handlePlanClick(plan.name)}
-                  className={`mt-8 block w-full py-3 px-6 border border-transparent rounded-md text-center font-medium ${
-                    plan.recommended
-                      ? 'bg-[#91c26a] text-white hover:bg-[#82b35b]'
-                      : 'bg-[#91c26a] bg-opacity-10 text-[#91c26a] hover:bg-opacity-20'
-                  } transition-colors duration-200`}
-                >
-                  Empezar Ahora
-                </button>
-              </div>
-              <div className="pt-6 pb-8 px-6">
-                <h3 className="text-xs font-medium text-gray-900 tracking-wide uppercase">
-                  ¿Qué está incluido?
-                </h3>
-                <ul className="mt-6 space-y-4">
-                  {plan.features.map((feature, featureIndex) => (
-                    <li key={featureIndex} className="flex space-x-3">
-                      <CheckCircle2 
-                        className={`flex-shrink-0 h-5 w-5 ${
-                          plan.recommended ? 'text-[#91c26a]' : 'text-[#91c26a]'
-                        }`}
-                      />
-                      <span className="text-base text-gray-500">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+            </h2>
+            <p className="text-gray-600 mb-4">{plan.description}</p>
+            <div className="text-3xl font-bold mb-4">
+              ${plan.price}/mes
+            </div>
+            <ul className="mb-6">
+              {plan.features.map((feature, index) => (
+                <li key={index} className="flex items-center mb-2">
+                  <CheckCircle2 className="text-green-500 mr-2" size={20} />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <button 
+              onClick={() => handlePurchasePlan(plan.id)}
+              className={`
+                w-full py-2 rounded-lg transition-colors 
+                ${user?.subscription?.planId === plan.id 
+                  ? 'bg-gray-300 text-gray-600 cursor-not-allowed' 
+                  : 'bg-blue-500 text-white hover:bg-blue-600'
+                }
+              `}
+              disabled={user?.subscription?.planId === plan.id}
+            >
+              {user?.subscription?.planId === plan.id ? 'Plan Actual' : 'Comprar Plan'}
+            </button>
+          </div>
+        ))}
       </div>
-    </section>
+    </div>
   );
 };
 

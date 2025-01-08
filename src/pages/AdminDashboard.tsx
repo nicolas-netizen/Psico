@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Package } from 'lucide-react';
+import { Package, FileText } from 'lucide-react';
 import PlansManager from '../components/admin/PlansManager';
+import TestsManager from '../components/admin/TestsManager';
 
 const AdminDashboard = () => {
-  const [activeTab] = useState('plans');
+  const [activeTab, setActiveTab] = useState('plans');
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -19,17 +20,31 @@ const AdminDashboard = () => {
         <div className="mb-6 border-b border-gray-200">
           <div className="flex space-x-8">
             <button
-              className="pb-4 px-1 border-b-2 border-[#91c26a] text-[#91c26a] font-medium flex items-center space-x-2"
+              onClick={() => setActiveTab('plans')}
+              className={`pb-4 px-1 ${activeTab === 'plans' 
+                ? 'border-b-2 border-[#91c26a] text-[#91c26a]' 
+                : 'text-gray-500 hover:text-gray-700'} 
+                font-medium flex items-center space-x-2`}
             >
               <Package className="h-5 w-5" />
               <span>Planes</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('tests')}
+              className={`pb-4 px-1 ${activeTab === 'tests' 
+                ? 'border-b-2 border-[#91c26a] text-[#91c26a]' 
+                : 'text-gray-500 hover:text-gray-700'} 
+                font-medium flex items-center space-x-2`}
+            >
+              <FileText className="h-5 w-5" />
+              <span>Tests</span>
             </button>
           </div>
         </div>
 
         {/* Content */}
         <div className="mt-6">
-          <PlansManager />
+          {activeTab === 'plans' ? <PlansManager /> : <TestsManager />}
         </div>
       </div>
     </div>

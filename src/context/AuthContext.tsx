@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from '../types/User';
 import type { Plan } from '../types/Plan';
-import type { Test, UserAnswer, TestResult } from '../types/Test';
+import type { Test, UserAnswer, TestResult, TestConfiguration, QuestionCategory, QuestionDifficulty, Aptitude, AptitudeTest, AptitudeCategory } from '../types/Test';
 import api from '../services/api';
 
 export interface AuthContextType {
@@ -19,14 +19,25 @@ export interface AuthContextType {
   getPlans: () => Promise<Plan[]>;
   purchasePlan: (planId: string) => Promise<void>;
   updateUser: (updatedUser: Partial<User>) => void;
+  fetchAptitudeTests: () => Promise<AptitudeTest[]>;
+  generateTest: (config: {
+    type?: 'random' | 'aptitude' | 'category';
+    requiredCategories?: Aptitude[];
+    aptitude?: Aptitude;
+    specificCategory?: AptitudeCategory;
+  }) => Promise<Test>;
+  loading: boolean;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ 
+  children: React.ReactNode | ((context: AuthContextType) => React.ReactNode) 
+}> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string>('guest');
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -98,8 +109,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return await api.getTestById(testId);
   };
 
-  const submitTestAnswers = async (testId: string, answers: UserAnswer[]) => {
-    return await api.submitTestAnswers(testId, answers);
+  const submitTestAnswers = async (
+    testId: string, 
+    userAnswers: UserAnswer[]
+  ): Promise<TestResult> => {
+    try {
+      // Convertir respuestas al formato esperado por el backend
+      const formattedAnswers = userAnswers.map(answer => ({
+        questionId: answer.questionId,
+        selectedOption: answer.selectedOption,
+        category: answer.category,
+        difficulty: answer.difficulty
+      }));
+
+      const response = await api.submitTestAnswers(testId, formattedAnswers);
+      return response;
+    } catch (error) {
+      console.error('Error submitting test answers:', error);
+      throw error;
+    }
   };
 
   const getUserTestHistory = async () => {
@@ -111,8 +139,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const purchasePlan = async (planId: string) => {
-    const updatedUser = await api.purchasePlan(planId);
+    if (!user) {
+      throw new Error('User must be logged in to purchase a plan');
+    }
+    const updatedUser = await api.purchasePlan(user.id, planId);
     setUser(updatedUser);
+    // Update local storage to persist the new user state
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
   };
 
   const updateUser = (updatedUser: Partial<User>) => {
@@ -123,25 +156,115 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const fetchAptitudeTests = async (): Promise<AptitudeTest[]> => {
+    try {
+      return await api.getTestsByAptitude('Inteligencia Lingüística');
+    } catch (error) {
+      console.error('Error fetching aptitude tests:', error);
+      throw error;
+    }
+  };
+
+  const generateTest = async (config: {
+    type?: 'random' | 'aptitude' | 'category';
+    requiredCategories?: Aptitude[];
+    aptitude?: Aptitude;
+    specificCategory?: AptitudeCategory;
+  }): Promise<Test> => {
+    try {
+      // Establecer un tipo por defecto si no se proporciona
+      const testType = config.type || 'random';
+
+      let availableTests = await api.getTests();
+
+      // Filtrar tests según el tipo de configuración
+      let selectedTest: Test;
+      switch (testType) {
+        case 'random':
+          // Test completamente aleatorio
+          selectedTest = availableTests[Math.floor(Math.random() * availableTests.length)];
+          break;
+
+        case 'aptitude':
+          // Filtrar por aptitud específica
+          if (!config.aptitude) {
+            throw new Error('Aptitud requerida para generar test');
+          }
+          
+          const aptitudeTests = availableTests.filter(
+            test => test.aptitudeCategory === config.aptitude
+          );
+          
+          // Filtrar por categoría específica si se proporciona
+          const filteredTests = config.specificCategory 
+            ? aptitudeTests.filter(test => test.category === config.specificCategory)
+            : aptitudeTests;
+
+          if (filteredTests.length === 0) {
+            throw new Error('No hay tests disponibles para esta selección');
+          }
+
+          selectedTest = filteredTests[Math.floor(Math.random() * filteredTests.length)];
+          break;
+
+        case 'category':
+          // Filtrar por categoría
+          const categoryTests = availableTests.filter(
+            test => test.category === config.specificCategory
+          );
+
+          if (categoryTests.length === 0) {
+            throw new Error('No hay tests disponibles para esta categoría');
+          }
+
+          selectedTest = categoryTests[Math.floor(Math.random() * categoryTests.length)];
+          break;
+
+        default:
+          // Fallback a test aleatorio
+          selectedTest = availableTests[Math.floor(Math.random() * availableTests.length)];
+      }
+
+      // Aleatorizar preguntas
+      const randomizedQuestions = selectedTest.questions
+        .map(q => ({ ...q, sortOrder: Math.random() }))
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map(({ sortOrder, ...rest }) => rest);
+
+      return {
+        ...selectedTest,
+        questions: randomizedQuestions
+      };
+    } catch (error) {
+      console.error('Error generando test:', error);
+      throw error;
+    }
+  };
+
+  const contextValue: AuthContextType = {
+    user,
+    isAuthenticated,
+    userRole,
+    loading,
+    login,
+    logout,
+    register,
+    getAvailableTests,
+    getTestById,
+    submitTestAnswers,
+    getUserTestHistory,
+    getPlans,
+    purchasePlan,
+    updateUser,
+    fetchAptitudeTests,
+    generateTest
+  };
+
   return (
-    <AuthContext.Provider 
-      value={{ 
-        isAuthenticated, 
-        user, 
-        userRole, 
-        login, 
-        register, 
-        logout,
-        getAvailableTests,
-        getTestById,
-        submitTestAnswers,
-        getUserTestHistory,
-        getPlans,
-        purchasePlan,
-        updateUser
-      }}
-    >
-      {children}
+    <AuthContext.Provider value={contextValue}>
+      {typeof children === 'function' 
+        ? children(contextValue) 
+        : children}
     </AuthContext.Provider>
   );
 };
@@ -167,7 +290,10 @@ const defaultAuthContext: AuthContextType = {
   getUserTestHistory: async () => [],
   getPlans: async () => [],
   purchasePlan: async () => {},
-  updateUser: () => {}
+  updateUser: () => {},
+  fetchAptitudeTests: async () => [],
+  generateTest: async () => ({} as Test),
+  loading: true
 };
 
 export default defaultAuthContext;

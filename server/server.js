@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3001;
 
 // Comprehensive CORS configuration
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5176', 'http://localhost:5177'], // Añade aquí el puerto 5176
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -177,28 +177,27 @@ app.post('/register', (req, res) => {
 // Plan Purchase Route
 app.post('/purchase-plan', (req, res) => {
   try {
-    const { userId, email, planId } = req.body;
+    const { userId, planId } = req.body;
 
-    let users = readJsonFile(USUARIOS_FILE);
-    const plans = readJsonFile(PLANES_FILE);
-
-    // Find user by id, email, or generate a new id
-    let userIndex = users.findIndex(u => 
-      u.id === userId || u.email === userId || u.email === email
-    );
-
-    // If user not found, return error
-    if (userIndex === -1) {
-      return res.status(404).json({ 
-        message: 'Usuario no encontrado', 
-        error: 'No se pudo identificar al usuario' 
-      });
+    // Validate input
+    if (!userId || !planId) {
+      return res.status(400).json({ message: 'User ID and Plan ID are required' });
     }
 
+    // Read users and plans
+    const users = readJsonFile(USUARIOS_FILE);
+    const plans = readJsonFile(PLANES_FILE);
+
+    // Find user and plan
+    const userIndex = users.findIndex(u => u.id === userId);
     const plan = plans.find(p => p.id === planId);
 
+    if (userIndex === -1) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     if (!plan) {
-      return res.status(404).json({ message: 'Plan no encontrado' });
+      return res.status(404).json({ message: 'Plan not found' });
     }
 
     // Update user's subscription
@@ -209,26 +208,16 @@ app.post('/purchase-plan', (req, res) => {
       features: plan.features
     };
 
-    // Ensure email is present
-    if (!users[userIndex].email) {
-      users[userIndex].email = email;
-    }
-
-    // Write updated users back to file
+    // Save updated users
     writeJsonFile(USUARIOS_FILE, users);
 
-    const { password, ...userWithoutPassword } = users[userIndex];
-
-    res.status(200).json({ 
-      message: 'Suscripción comprada exitosamente', 
-      subscription: users[userIndex].subscription,
-      user: userWithoutPassword
-    });
+    // Return updated user
+    res.status(200).json(users[userIndex]);
   } catch (error) {
     console.error('Error purchasing plan:', error);
     res.status(500).json({ 
-      message: 'Error al comprar el plan', 
-      error: error.message 
+      message: 'Error al comprar el plan',
+      error: error.toString() 
     });
   }
 });
@@ -1069,6 +1058,269 @@ app.get('/user-test-history/:userId', (req, res) => {
     res.status(500).json({ 
       message: 'Error al obtener el historial de tests',
       error: error.toString() 
+    });
+  }
+});
+
+// Add this route before the last routes in the file
+app.get('/plans/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const plans = readJsonFile(PLANES_FILE);
+    const plan = plans.find(p => p.id === id);
+
+    if (!plan) {
+      return res.status(404).json({ message: 'Plan not found' });
+    }
+
+    res.json(plan);
+  } catch (error) {
+    console.error('Error fetching plan:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+const TestService = require('./services/testService');
+
+// Add these routes to your existing server.js
+app.post('/tests/generate', (req, res) => {
+  try {
+    console.log('Test Generation Request Received:', {
+      body: req.body,
+      headers: req.headers,
+      timestamp: new Date().toISOString()
+    });
+
+    const { configuration, userId } = req.body;
+    
+    // Validate configuration
+    if (!configuration) {
+      console.error('Invalid test configuration: No configuration provided');
+      return res.status(400).json({ message: 'Invalid test configuration' });
+    }
+
+    if (!userId) {
+      console.error('Invalid test generation: No userId provided');
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    // Validate user existence 
+    const user = users.find(u => u.id === userId);
+    if (!user) {
+      console.error(`User not found with ID: ${userId}`);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Ensure required configuration fields exist
+    const defaultConfiguration = {
+      name: configuration.name || 'Default Test',
+      totalQuestions: configuration.totalQuestions || 5,
+      timeLimit: configuration.timeLimit || 30,
+      requiredCategories: configuration.requiredCategories || [
+        'mathematical', 
+        'language', 
+        'logical_reasoning'
+      ],
+      questionDistribution: configuration.questionDistribution || {
+        'mathematical': { minQuestions: 1, maxQuestions: 2 },
+        'language': { minQuestions: 1, maxQuestions: 2 },
+        'logical_reasoning': { minQuestions: 1, maxQuestions: 2 }
+      },
+      scoreWeights: configuration.scoreWeights || [
+        {
+          category: 'mathematical',
+          basePoints: 1,
+          difficultyMultiplier: {
+            'basic': 1,
+            'intermediate': 1.5,
+            'advanced': 2
+          }
+        }
+      ]
+    };
+
+    const generatedTest = TestService.generateTest(defaultConfiguration);
+    
+    if (!generatedTest || !generatedTest.questions || generatedTest.questions.length === 0) {
+      console.error('Test generation failed: No questions generated', { configuration: defaultConfiguration });
+      return res.status(500).json({ message: 'Failed to generate test' });
+    }
+
+    console.log('Test Generated Successfully:', {
+      testId: generatedTest.id,
+      questionCount: generatedTest.questions.length
+    });
+
+    res.status(200).json(generatedTest);
+  } catch (error) {
+    console.error('Comprehensive Test Generation Error:', {
+      message: error.message,
+      stack: error.stack,
+      configuration: req.body.configuration
+    });
+    
+    res.status(500).json({ 
+      message: 'Error generating test', 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+app.post('/tests/submit', (req, res) => {
+  try {
+    const { testId, userAnswers, userId } = req.body;
+    
+    // Find the test
+    const tests = readJsonFile(TESTS_FILE);
+    const test = tests.find(t => t.id === testId);
+
+    if (!test) {
+      return res.status(404).json({ message: 'Test not found' });
+    }
+
+    // Calculate test result
+    const testResult = TestService.calculateTestScore(test, userAnswers);
+    
+    // Add user and timestamp information
+    testResult.userId = userId;
+    testResult.completedAt = new Date();
+
+    // Save test result
+    const testResults = readJsonFile(TEST_RESULTS_FILE);
+    testResults.push(testResult);
+    writeJsonFile(TEST_RESULTS_FILE, testResults);
+
+    res.status(200).json(testResult);
+  } catch (error) {
+    console.error('Test submission error:', error);
+    res.status(500).json({ message: 'Error submitting test', error: error.message });
+  }
+});
+
+app.get('/tests/error-statistics', (req, res) => {
+  try {
+    const testResults = readJsonFile(TEST_RESULTS_FILE);
+    
+    // Aggregate error statistics
+    const errorStatistics = {
+      overallErrorRate: 0,
+      categoryErrors: {},
+      mostDifficultQuestions: []
+    };
+
+    const questionErrorCount = {};
+
+    testResults.forEach(result => {
+      result.incorrectQuestions.forEach(questionId => {
+        if (!questionErrorCount[questionId]) {
+          questionErrorCount[questionId] = 0;
+        }
+        questionErrorCount[questionId]++;
+      });
+    });
+
+    // Sort questions by error frequency
+    errorStatistics.mostDifficultQuestions = Object.entries(questionErrorCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([questionId, errorCount]) => ({
+        questionId,
+        errorCount,
+        errorPercentage: (errorCount / testResults.length) * 100
+      }));
+
+    res.status(200).json(errorStatistics);
+  } catch (error) {
+    console.error('Error statistics generation error:', error);
+    res.status(500).json({ message: 'Error generating error statistics', error: error.message });
+  }
+});
+
+const users = JSON.parse(fs.readFileSync(path.join(__dirname, 'usuarios.json'), 'utf8'));
+
+// Route to fetch available aptitude tests
+app.get('/tests/aptitudes', (req, res) => {
+  try {
+    const { aptitude } = req.query;
+    const aptitudeTests = readJsonFile(path.join(__dirname, 'aptitude_tests.json'));
+    
+    if (!aptitude) {
+      return res.status(400).json({ message: 'Se requiere especificar una aptitud' });
+    }
+
+    const filteredTests = aptitudeTests.filter(test => 
+      test.aptitude.toLowerCase() === aptitude.toString().toLowerCase()
+    );
+
+    res.status(200).json(filteredTests);
+  } catch (error) {
+    console.error('Error fetching aptitude tests:', error);
+    res.status(500).json({ message: 'Error al obtener los tests de aptitud' });
+  }
+});
+
+// Update test generation route to handle aptitude-specific tests
+app.post('/tests/generate', (req, res) => {
+  try {
+    const { configuration, userId } = req.body;
+    
+    // Validate configuration
+    if (!configuration || !userId) {
+      return res.status(400).json({ message: 'Invalid test configuration or user ID' });
+    }
+
+    const allQuestions = TestService.readQuestions();
+    let selectedQuestions = [];
+
+    // Random test generation
+    if (configuration.type === 'random') {
+      const requiredCategories = configuration.requiredCategories || [];
+      
+      requiredCategories.forEach(category => {
+        const categoryQuestions = allQuestions.filter(q => 
+          q.category === category && q.isActive
+        );
+
+        const randomQuestions = TestService.selectRandomQuestions(
+          categoryQuestions, 
+          2, 
+          4
+        );
+
+        selectedQuestions.push(...randomQuestions);
+      });
+    } 
+    // Aptitude-specific test generation
+    else if (configuration.type === 'aptitude') {
+      const aptitudeQuestions = allQuestions.filter(q => 
+        q.aptitude === configuration.specificAptitude && q.isActive
+      );
+
+      selectedQuestions = TestService.selectRandomQuestions(
+        aptitudeQuestions, 
+        5, 
+        10
+      );
+    } else {
+      return res.status(400).json({ message: 'Invalid test type' });
+    }
+
+    // Generate test
+    const generatedTest = {
+      id: uuidv4(),
+      title: `${configuration.type === 'random' ? 'Test Aleatorio' : configuration.specificAptitude} - ${new Date().toLocaleDateString()}`,
+      questions: selectedQuestions,
+      timeLimit: 30, // Default 30 minutes
+      createdAt: new Date().toISOString()
+    };
+
+    res.status(200).json(generatedTest);
+  } catch (error) {
+    console.error('Comprehensive Test Generation Error:', error);
+    res.status(500).json({ 
+      message: 'Error generating test', 
+      error: error.message 
     });
   }
 });

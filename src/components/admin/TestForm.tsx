@@ -1,8 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { Test, TestQuestion } from '../../types/Test';
+import { 
+  Test, 
+  TestQuestion, 
+  AptitudeCategory, 
+  Aptitude 
+} from '../../types/Test';
 import api from '../../services/api';
 import { Trash2, Plus } from 'lucide-react';
+
+// Agrupación de categorías por aptitud
+const APTITUDE_CATEGORIES = {
+  [Aptitude.LINGUISTIC_INTELLIGENCE]: [
+    AptitudeCategory.SYNONYMS,
+    AptitudeCategory.ANTONYMS,
+    AptitudeCategory.VERBAL_ANALOGIES,
+    AptitudeCategory.SPELLING,
+    AptitudeCategory.PROVERBS
+  ],
+  [Aptitude.MATHEMATICAL_LOGIC]: [
+    AptitudeCategory.BASIC_OPERATIONS,
+    AptitudeCategory.REASONING_PROBLEMS,
+    AptitudeCategory.AREA_PERIMETER_CALCULATION,
+    AptitudeCategory.DECIMAL_FRACTION_OPERATIONS,
+    AptitudeCategory.PROPORTIONS,
+    AptitudeCategory.PERCENTAGES
+  ],
+  [Aptitude.SPATIAL_INTELLIGENCE]: [
+    AptitudeCategory.FIGURE_FOLDING,
+    AptitudeCategory.PERSPECTIVE_VISUALIZATION,
+    AptitudeCategory.FIGURE_ROTATION,
+    AptitudeCategory.BLOCK_COUNTING
+  ],
+  [Aptitude.BODILY_KINESTHETIC]: [
+    AptitudeCategory.PHYSICAL_MECHANICAL_TESTS,
+    AptitudeCategory.MECHANISMS,
+    AptitudeCategory.BALANCE_SYSTEMS,
+    AptitudeCategory.PULLEYS,
+    AptitudeCategory.GEARS
+  ],
+  [Aptitude.INTRAPERSONAL_INTELLIGENCE]: [
+    AptitudeCategory.FILE_ORGANIZATION,
+    AptitudeCategory.ALPHABETICAL_ORDERING,
+    AptitudeCategory.FATIGUE_RESISTANCE,
+    AptitudeCategory.ERROR_DETECTION
+  ]
+};
 
 interface TestFormProps {
   initialTest?: Test | null;
@@ -23,8 +66,13 @@ const TestForm: React.FC<TestFormProps> = ({
     plans: initialTest?.plans || [],
     category: initialTest?.category || '',
     difficulty: initialTest?.difficulty || 'basic',
-    timeLimit: initialTest?.timeLimit || 30
+    timeLimit: initialTest?.timeLimit || 30,
+    aptitudeCategory: initialTest?.aptitudeCategory || null
   });
+
+  const [selectedAptitude, setSelectedAptitude] = useState<Aptitude | null>(
+    initialTest?.category as Aptitude || null
+  );
 
   useEffect(() => {
     // Fetch available plans when component mounts
@@ -48,6 +96,22 @@ const TestForm: React.FC<TestFormProps> = ({
     }));
   };
 
+  const handleAptitudeChange = (aptitude: Aptitude) => {
+    setSelectedAptitude(aptitude);
+    setFormData(prev => ({
+      ...prev,
+      category: aptitude,
+      aptitudeCategory: null  // Reset specific category
+    }));
+  };
+
+  const handleAptitudeCategoryChange = (category: AptitudeCategory) => {
+    setFormData(prev => ({
+      ...prev,
+      aptitudeCategory: category
+    }));
+  };
+
   const handlePlanSelection = (planId: string) => {
     setFormData(prev => {
       const updatedPlans = prev.plans?.includes(planId)
@@ -67,6 +131,7 @@ const TestForm: React.FC<TestFormProps> = ({
     };
 
     setFormData(prev => ({
+
       ...prev,
       questions: [...(prev.questions || []), newQuestion]
     }));
@@ -209,10 +274,52 @@ const TestForm: React.FC<TestFormProps> = ({
                   {plan.name}
                 </label>
               </div>
-            ))
-          )}
+            )))
+          }
         </div>
       </div>
+
+      <div>
+        <label className="block text-gray-700 font-medium mb-2">Aptitud</label>
+        <div className="flex flex-wrap gap-2">
+          {Object.values(Aptitude).map((aptitude) => (
+            <button
+              key={aptitude}
+              type="button"
+              onClick={() => handleAptitudeChange(aptitude)}
+              className={`px-4 py-2 rounded ${
+                selectedAptitude === aptitude 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              {aptitude}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedAptitude && (
+        <div>
+          <label className="block text-gray-700 font-medium mb-2">Categoría de Aptitud</label>
+          <div className="flex flex-wrap gap-2">
+            {APTITUDE_CATEGORIES[selectedAptitude].map((category) => (
+              <button
+                key={category}
+                type="button"
+                onClick={() => handleAptitudeCategoryChange(category)}
+                className={`px-4 py-2 rounded ${
+                  formData.aptitudeCategory === category 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="flex justify-between items-center mb-2">

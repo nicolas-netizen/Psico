@@ -1,0 +1,185 @@
+[
+  {
+    "id": "verbal-1",
+    "name": "Test de Aptitud Verbal",
+    "aptitude": "Inteligencia Lingüística",
+    "description": "Evalúa tu capacidad de comprensión y manejo del lenguaje",
+    "categories": [
+      {
+        "id": "synonyms-easy",
+        "name": "Sinónimos",
+        "description": "Identifica palabras con significados similares",
+        "difficulty": "Fácil"
+      },
+      {
+        "id": "antonyms-medium",
+        "name": "Antónimos",
+        "description": "Encuentra palabras con significados opuestos",
+        "difficulty": "Medio"
+      },
+      {
+        "id": "verbal-analogies-hard",
+        "name": "Analogías Verbales",
+        "description": "Establece relaciones lógicas entre palabras",
+        "difficulty": "Difícil"
+      }
+    ],
+    "timeLimit": 40
+  },
+  {
+    "id": "numerical-1",
+    "name": "Test de Aptitud Numérica",
+    "aptitude": "Lógica Matemática",
+    "description": "Mide tu habilidad para resolver problemas matemáticos",
+    "categories": [
+      {
+        "id": "basic-ops-easy",
+        "name": "Operaciones Elementales",
+        "description": "Realiza operaciones básicas de suma, resta, multiplicación y división",
+        "difficulty": "Fácil"
+      },
+      {
+        "id": "reasoning-problems-medium",
+        "name": "Problemas de Razonamiento",
+        "description": "Resuelve problemas que requieren análisis y estrategia",
+        "difficulty": "Medio"
+      },
+      {
+        "id": "percentages-hard",
+        "name": "Porcentajes",
+        "description": "Calcula porcentajes y proporciones complejas",
+        "difficulty": "Difícil"
+      }
+    ],
+    "timeLimit": 45
+  },
+  {
+    "id": "spatial-1",
+    "name": "Test de Aptitud Espacial",
+    "aptitude": "Inteligencia Espacial",
+    "description": "Evalúa tu capacidad de visualización y manipulación espacial",
+    "categories": [
+      {
+        "id": "figure-folding-easy",
+        "name": "Plegado de Figuras",
+        "description": "Imagina cómo se verá una figura al plegarla",
+        "difficulty": "Fácil"
+      },
+      {
+        "id": "perspective-visualization-medium",
+        "name": "Visualización de Perspectivas",
+        "description": "Observa figuras desde diferentes ángulos",
+        "difficulty": "Medio"
+      },
+      {
+        "id": "block-counting-hard",
+        "name": "Conteo de Bloques",
+        "description": "Cuenta y visualiza bloques en configuraciones complejas",
+        "difficulty": "Difícil"
+      }
+    ],
+    "timeLimit": 35
+  },
+  {
+    "id": "mechanical-1",
+    "name": "Test de Aptitud Mecánica",
+    "aptitude": "Inteligencia Corporal-Kinestésica",
+    "description": "Mide tu comprensión de principios mecánicos y físicos",
+    "categories": [
+      {
+        "id": "balance-systems-easy",
+        "name": "Sistemas de Balanza",
+        "description": "Comprende el equilibrio y la distribución de pesos",
+        "difficulty": "Fácil"
+      },
+      {
+        "id": "pulleys-medium",
+        "name": "Poleas",
+        "description": "Analiza sistemas de poleas y transmisión de fuerza",
+        "difficulty": "Medio"
+      },
+      {
+        "id": "gears-hard",
+        "name": "Engranajes",
+        "description": "Comprende la interacción y movimiento de engranajes",
+        "difficulty": "Difícil"
+      }
+    ],
+    "timeLimit": 40
+  },
+  {
+    "id": "perceptive-1",
+    "name": "Test de Aptitud Perceptiva",
+    "aptitude": "Inteligencia Intrapersonal",
+    "description": "Evalúa tu capacidad de percepción y detalle",
+    "categories": [
+      {
+        "id": "file-organization-easy",
+        "name": "Organización de Archivos",
+        "description": "Ordena y clasifica información de manera eficiente",
+        "difficulty": "Fácil"
+      },
+      {
+        "id": "error-detection-medium",
+        "name": "Detección de Errores",
+        "description": "Identifica inconsistencias y errores en datos",
+        "difficulty": "Medio"
+      },
+      {
+        "id": "fatigue-resistance-hard",
+        "name": "Resistencia a la Fatiga",
+        "description": "Mantén la concentración en tareas repetitivas",
+        "difficulty": "Difícil"
+      }
+    ],
+    "timeLimit": 30
+  },
+  {
+    "id": "memory-1",
+    "name": "Test de Aptitud de Memoria",
+    "aptitude": "Inteligencia Intrapersonal",
+    "description": "Prueba tu capacidad de retención y recuperación de información",
+    "categories": [
+      {
+        "id": "visual-memory-easy",
+        "name": "Memoria Visual",
+        "description": "Recuerda y reproduce imágenes y patrones",
+        "difficulty": "Fácil"
+      },
+      {
+        "id": "reading-memory-medium",
+        "name": "Memoria Lectora",
+        "description": "Retén y comprende información textual",
+        "difficulty": "Medio"
+      }
+    ],
+    "timeLimit": 25
+  },
+  {
+    "id": "abstract-reasoning-1",
+    "name": "Test de Razonamiento Abstracto",
+    "aptitude": "Lógica Matemática",
+    "description": "Evalúa tu capacidad de pensamiento lógico y abstracto",
+    "categories": [
+      {
+        "id": "alphanumeric-series-easy",
+        "name": "Series Alfanuméricas",
+        "description": "Identifica patrones en series de letras y números",
+        "difficulty": "Fácil"
+      },
+      {
+        "id": "figure-series-medium",
+        "name": "Series de Figuras",
+        "description": "Reconoce secuencias y transformaciones en figuras",
+        "difficulty": "Medio"
+      },
+      {
+        "id": "domino-reasoning-hard",
+        "name": "Razonamiento con Dominós",
+        "description": "Analiza patrones y secuencias complejas",
+        "difficulty": "Difícil"
+      }
+    ],
+    "timeLimit": 50
+  }
+]

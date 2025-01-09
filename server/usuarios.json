@@ -3,13 +3,13 @@
     "id": "admin-1",
     "email": "admin@chapiri.com",
     "name": "Admin",
-    "password": "$2a$10$DScARQoKE6Pa4tEOtXM6iOyGnGnNPqrFpLfnYJAabp6LyJDyXd8Rq",
+    "password": "$2a$10$LlSRNYZ2ksmaVgHyUrRwD.4d9krRv6Tv5ji4kUrlBT8TzgYYUbNwK",
     "role": "admin",
-    "createdAt": "2025-01-08T20:27:19.961Z",
+    "createdAt": "2025-01-09T01:23:15.216Z",
     "subscription": {
       "planId": "plan-1",
       "planName": "Administrador",
-      "purchaseDate": "2025-01-08T20:27:19.963Z",
+      "purchaseDate": "2025-01-09T01:23:15.216Z",
       "features": [
         "Acceso total al sistema"
       ]
@@ -46,6 +46,25 @@
       "features": [
         "Poder+1000",
         "Poder +2''0000"
+      ]
+    }
+  },
+  {
+    "id": "eee45c3d-2c24-4f76-ab1b-0f9b87fc0647",
+    "email": "nicolaspaniagua766@gmail.com",
+    "name": "Pedos",
+    "password": "$2a$10$aC7DXHiUc13KgFbJZD5kveNqkMexKsyxZfoIt5gUdTnfxxY9AYBRa",
+    "role": "user",
+    "createdAt": "2025-01-09T00:44:30.922Z",
+    "subscription": {
+      "planId": "plan-1",
+      "planName": "Básico",
+      "purchaseDate": "2025-01-09T00:58:52.207Z",
+      "features": [
+        "Acceso a tests básicos",
+        "Límite de 5 tests por mes",
+        "Soporte por correo electrónico",
+        "a"
       ]
     }
   }

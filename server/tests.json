@@ -1,35 +1,16 @@
 [
   {
-    "id": 1,
-    "title": "Test Matemáticas",
-    "description": "Evaluación básica de matemáticas.",
-    "fileUrl": "/tests/matematicas.pdf",
-    "plans": [
-      1,
-      2
-    ]
-  },
-  {
-    "id": 2,
-    "title": "Test Física Avanzada",
-    "description": "Test avanzado para estudiantes de física.",
-    "fileUrl": "/tests/fisica.pdf",
-    "plans": [
-      2
-    ]
-  },
-  {
-    "title": "Test",
-    "description": "Test",
+    "title": "asasd",
+    "description": "asdsadasd",
     "questions": [
       {
-        "id": "question-1736366192251",
-        "text": "a1",
+        "id": "question-1736386075933",
+        "text": "assad",
         "options": [
-          "12",
-          "2",
-          "3",
-          "4"
+          "asddsa",
+          "asdasd",
+          "asdasd",
+          "asdasd"
         ],
         "correctAnswer": 0
       }
@@ -38,64 +19,67 @@
       "plan-1736365177702",
       "plan-1"
     ],
-    "category": "",
+    "category": "Inteligencia Espacial",
     "difficulty": "basic",
     "timeLimit": 30,
-    "id": "test-1736366206451",
-    "createdAt": "2025-01-08T19:56:46.451Z",
-    "updatedAt": "2025-01-08T20:14:13.208Z"
+    "aptitudeCategory": "Plegado de Figuras",
+    "id": "test-1736386080142",
+    "createdAt": "2025-01-09T01:28:00.142Z",
+    "updatedAt": "2025-01-09T01:28:00.142Z"
   },
   {
-    "title": "Test basico",
-    "description": "Test",
+    "title": "asdasd",
+    "description": "asdasd",
     "questions": [
       {
-        "id": "question-1736367749734",
-        "text": "1112",
+        "id": "question-1736386446232",
+        "text": "sadasd",
         "options": [
-          "2",
-          "3",
-          "4",
-          "5"
+          "asdsda",
+          "asdas",
+          "asdsasad",
+          "asddsa"
         ],
         "correctAnswer": 0
       }
     ],
     "plans": [
+      "plan-1736365177702",
       "plan-1"
     ],
-    "category": "",
-    "difficulty": "basic",
+    "category": "Lógica Matemática",
+    "difficulty": "intermediate",
     "timeLimit": 30,
-    "id": "test-1736367759409",
-    "createdAt": "2025-01-08T20:22:39.409Z",
-    "updatedAt": "2025-01-08T20:22:39.409Z"
+    "aptitudeCategory": "Operaciones Elementales",
+    "id": "test-1736386463073",
+    "createdAt": "2025-01-09T01:34:23.073Z",
+    "updatedAt": "2025-01-09T01:34:23.073Z"
   },
   {
-    "title": "Test40",
-    "description": "Test40",
+    "title": "assadsda",
+    "description": "asdasd",
     "questions": [
       {
-        "id": "question-1736368931359",
-        "text": "2+2",
+        "id": "question-1736386481326",
+        "text": "asdas",
         "options": [
-          "4",
-          "test30",
-          "test40",
-          "test150"
+          "sadsaasd",
+          "asddas",
+          "assadasdasdsad",
+          "saddasasdasdasdsadasdasdasd"
         ],
         "correctAnswer": 0
       }
     ],
     "plans": [
-      "plan-1",
       "plan-1736365177702"
     ],
-    "category": "",
-    "difficulty": "advanced",
-    "timeLimit": "120",
-    "id": "test-1736369568039",
-    "createdAt": "2025-01-08T20:52:48.039Z",
-    "updatedAt": "2025-01-08T20:52:48.039Z"
+    "category": "Inteligencia Lingüística",
+    "difficulty": "intermediate",
+    "timeLimit": 30,
+    "aptitudeCategory": null,
+    "id": "test-1736386487868",
+    "createdAt": "2025-01-09T01:34:47.868Z",
+    "updatedAt": "2025-01-09T01:34:47.868Z"
   }
 ]

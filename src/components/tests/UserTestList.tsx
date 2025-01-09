@@ -29,47 +29,21 @@ const UserTestList: React.FC<UserTestListProps> = ({ userId, userPlan }) => {
     const fetchTestsAndHistory = async () => {
       try {
         setLoading(true);
-        console.log('UserTestList: Fetching tests for User Plan:', userPlan);
-        console.log('UserTestList: User ID:', userId);
-        
-        // Fetch tests for the user's plan
         const planTests = await api.getTestsByPlan(userPlan);
-        
-        console.group('UserTestList Test Fetching');
-        console.log('Received Plan Tests:', JSON.stringify(planTests, null, 2));
-        console.log('Number of Plan Tests:', planTests.length);
-        
-        // Log details of each test
-        planTests.forEach((test, index) => {
-          console.log(`Test ${index + 1}:`, {
-            id: test.id,
-            title: test.title,
-            plans: test.plans,
-            difficulty: test.difficulty,
-            description: test.description
-          });
-        });
-        console.groupEnd();
-
         setTests(planTests);
 
-        // Fetch user's test history
         const history = await api.getUserTestHistory(userId);
-        console.log('User Test History:', history);
         setTestHistory(history);
       } catch (err) {
-        console.error('UserTestList: Error in fetchTestsAndHistory:', err);
+        console.error('Error fetching tests and history:', err);
         setError('No se pudieron cargar los tests');
       } finally {
         setLoading(false);
       }
     };
 
-    // Only fetch if both userId and userPlan are available
     if (userId && userPlan) {
       fetchTestsAndHistory();
-    } else {
-      console.warn('UserTestList: Missing userId or userPlan', { userId, userPlan });
     }
   }, [userId, userPlan]);
 

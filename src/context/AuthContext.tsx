@@ -14,7 +14,7 @@ export interface AuthContextType {
   logout: () => void;
   getAvailableTests: () => Promise<Test[]>;
   getTestById: (testId: string) => Promise<Test>;
-  submitTestAnswers: (testId: string, answers: UserAnswer[]) => Promise<TestResult>;
+  submitTestAnswers: (testId: string, answers: any[]) => Promise<TestResult>;
   getUserTestHistory: () => Promise<TestResult[]>;
   getPlans: () => Promise<Plan[]>;
   purchasePlan: (planId: string) => Promise<void>;
@@ -109,21 +109,10 @@ export const AuthProvider: React.FC<{
     return await api.getTestById(testId);
   };
 
-  const submitTestAnswers = async (
-    testId: string, 
-    userAnswers: UserAnswer[]
-  ): Promise<TestResult> => {
+  const submitTestAnswers = async (testId: string, answers: any[]) => {
     try {
-      // Convertir respuestas al formato esperado por el backend
-      const formattedAnswers = userAnswers.map(answer => ({
-        questionId: answer.questionId,
-        selectedOption: answer.selectedOption,
-        category: answer.category,
-        difficulty: answer.difficulty
-      }));
-
-      const response = await api.submitTestAnswers(testId, formattedAnswers);
-      return response;
+      const result = await api.submitTestAnswers(testId, answers);
+      return result;
     } catch (error) {
       console.error('Error submitting test answers:', error);
       throw error;

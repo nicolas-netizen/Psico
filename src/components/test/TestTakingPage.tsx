@@ -1,110 +1,155 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
-  Test, 
-  TestQuestion, 
-  UserAnswer, 
-  QuestionCategory, 
-  QuestionDifficulty 
-} from '../../types/Test';
-import { useAuth } from '../../context/AuthContext';
-import { 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
   ArrowRight, 
   ArrowLeft 
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { AuthContext } from '../../context/AuthContext';
 
+// Enum for question categories
+enum QuestionCategory {
+  MATHEMATICAL = 'MATHEMATICAL',
+  VERBAL = 'VERBAL',
+  LOGICAL = 'LOGICAL'
+}
+
+// Icons for different categories
 const categoryIcons = {
   [QuestionCategory.MATHEMATICAL]: '🔢',
-  [QuestionCategory.LANGUAGE]: '📚',
-  [QuestionCategory.LOGICAL_REASONING]: '🧠',
-  [QuestionCategory.MEMORY]: '🧩',
-  [QuestionCategory.PERSONALITY]: '👤',
-  [QuestionCategory.SPATIAL_INTELLIGENCE]: '🌐'
+  [QuestionCategory.VERBAL]: '📝',
+  [QuestionCategory.LOGICAL]: '🧩'
 };
 
-const difficultyColors = {
-  [QuestionDifficulty.EASY]: 'bg-green-100 text-green-800',
-  [QuestionDifficulty.MEDIUM]: 'bg-yellow-100 text-yellow-800',
-  [QuestionDifficulty.HARD]: 'bg-red-100 text-red-800'
-};
+// Interface for a single question
+interface Question {
+  id: string;
+  text: string;
+  category: QuestionCategory;
+  options: string[];
+  correctOption?: number;
+}
+
+// Interface for user's answer
+interface UserAnswer {
+  questionId: string;
+  selectedOption: number;
+  category: QuestionCategory;
+}
 
 const TestTakingPage: React.FC = () => {
+  const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { submitTestAnswers } = useAuth();
+  const { getTestById, submitTestAnswers } = useContext(AuthContext);
 
-  const [test, setTest] = useState<Test | null>(null);
+  // State variables
+  const [test, setTest] = useState<{ 
+    id: string; 
+    title: string; 
+    questions: Question[] 
+  } | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const [animationClass, setAnimationClass] = useState('animate-fade-in');
 
+  // Fetch test details on component mount
   useEffect(() => {
-    const testFromState = location.state?.test;
-    
-    if (!testFromState) {
-      navigate('/dashboard');
-      return;
-    }
+    const fetchTestDetails = async () => {
+      try {
+        if (!testId) {
+          toast.error('No se encontró el ID del test');
+          navigate('/dashboard');
+          return;
+        }
 
-    setTest(testFromState);
-    setTimeRemaining(testFromState.timeLimit * 60);
-  }, [location.state, navigate]);
-
-  // Timer effect
-  useEffect(() => {
-    if (timeRemaining <= 0) {
-      handleSubmitTest();
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => prev - 1);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeRemaining]);
-
-  const handleAnswerSelect = (questionIndex: number, optionIndex: number) => {
-    const currentQuestion = test?.questions[questionIndex];
-    
-    if (!currentQuestion) return;
-
-    const newAnswer = {
-      questionId: currentQuestion.id,
-      selectedOption: optionIndex,
-      category: currentQuestion.category,
-      difficulty: currentQuestion.difficulty
+        const fetchedTest = await getTestById(testId);
+        setTest(fetchedTest);
+      } catch (error) {
+        console.error('Error fetching test:', error);
+        toast.error('No se pudo cargar el test');
+        navigate('/dashboard');
+      }
     };
 
-    const updatedAnswers = userAnswers.filter(
-      answer => answer.questionId !== currentQuestion.id
-    );
-    setUserAnswers([...updatedAnswers, newAnswer]);
+    fetchTestDetails();
+  }, [testId, navigate, getTestById]);
 
-    // Animate and move to next question
-    setAnimationClass('animate-slide-out');
-    setTimeout(() => {
-      if (questionIndex < (test?.questions.length || 0) - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setAnimationClass('animate-fade-in');
-      }
-    }, 300);
+  // Handle option selection
+  const handleOptionSelect = (optionIndex: number) => {
+    if (!test) return;
+
+    const currentQuestion = test.questions[currentQuestionIndex];
+    
+    // Update or add user answer
+    setUserAnswers(prevAnswers => {
+      // Remove existing answer for this question if it exists
+      const filteredAnswers = prevAnswers.filter(
+        answer => answer.questionId !== currentQuestion.id
+      );
+
+      // Add new answer
+      return [
+        ...filteredAnswers, 
+        {
+          questionId: currentQuestion.id,
+          selectedOption: optionIndex,
+          category: currentQuestion.category
+        }
+      ];
+    });
   };
 
-  const handleSubmitTest = async () => {
-    if (!isTestComplete()) {
-      alert('Por favor, responde todas las preguntas');
+  // Check if current question is answered
+  const isCurrentQuestionAnswered = () => {
+    if (!test) return false;
+    const currentQuestion = test.questions[currentQuestionIndex];
+    return userAnswers.some(
+      answer => answer.questionId === currentQuestion.id
+    );
+  };
+
+  // Navigation between questions
+  const goToNextQuestion = () => {
+    if (!test) return;
+    
+    // Ensure current question is answered
+    if (!isCurrentQuestionAnswered()) {
+      toast.error('Por favor, selecciona una respuesta antes de continuar');
       return;
     }
 
+    // Move to next question or submit test
+    if (currentQuestionIndex < test.questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      handleSubmitTest();
+    }
+  };
+
+  const goToPreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    }
+  };
+
+  // Submit test
+  const handleSubmitTest = async () => {
     try {
-      const result = await submitTestAnswers(test.id, userAnswers);
+      // Validate that all questions are answered
+      const unansweredQuestions = test?.questions.filter(
+        q => !userAnswers.some(a => a.questionId === q.id)
+      );
+
+      if (unansweredQuestions && unansweredQuestions.length > 0) {
+        toast.error(`Por favor, responda todas las preguntas. Faltan ${unansweredQuestions.length} preguntas por responder.`);
+        return;
+      }
+
+      // Submit answers
+      const result = await submitTestAnswers(test!.id, userAnswers);
       
-      navigate('/test-results', { 
+      // Navigate to results page
+      navigate(`/test-results/${result.id}`, { 
         state: { 
           testResult: result, 
           test 
@@ -112,83 +157,87 @@ const TestTakingPage: React.FC = () => {
       });
     } catch (error) {
       console.error('Error submitting test:', error);
-      alert('No se pudo enviar el test');
+      toast.error('Hubo un error al enviar el test. Por favor, intente nuevamente.');
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
-  };
-
-  const isTestComplete = () => {
-    return userAnswers.length === test?.questions.length;
-  };
-
+  // Render loading state
   if (!test) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-          <p className="mt-4 text-gray-600">Loading test...</p>
-        </div>
-      </div>
-    );
+    return <div className="text-center text-xl mt-10">Cargando test...</div>;
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-2xl mx-auto bg-white shadow-lg rounded-lg p-6">
-        <h1 className="text-2xl font-bold mb-6 text-center">{test.title}</h1>
-        <p className="text-gray-600 mb-4 text-center">{test.description}</p>
+  // Current question
+  const currentQuestion = test.questions[currentQuestionIndex];
 
-        <div className="space-y-6">
-          {test.questions.map((question, questionIndex) => (
-            <div 
-              key={`question-${questionIndex}`} 
-              className="bg-gray-50 p-4 rounded-lg"
-            >
-              <h3 className="text-lg font-semibold mb-4">
-                {questionIndex + 1}. {question.text}
-              </h3>
-              <div className="space-y-2">
-                {question.options.map((option, optionIndex) => (
-                  <button
-                    key={`option-${questionIndex}-${optionIndex}`}
-                    onClick={() => handleAnswerSelect(questionIndex, optionIndex)}
-                    className={`w-full text-left px-4 py-2 rounded-md transition-colors ${
-                      userAnswers.some(a => 
-                        a.questionId === question.id && 
-                        a.selectedOption === optionIndex
-                      ) 
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-white border border-gray-300 hover:bg-gray-100'
-                    }`}
-                  >
-                    {/* Manejar tanto objetos como strings */}
-                    {typeof option === 'object' ? option.text : option}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-2xl">
+      <div className="bg-white shadow-lg rounded-lg p-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">{test.title}</h1>
+          <div className="text-sm text-gray-600">
+            Pregunta {currentQuestionIndex + 1} de {test.questions.length}
+          </div>
         </div>
 
-        <div className="mt-6 flex justify-between items-center">
-          <div className="text-gray-600">
-            Tiempo restante: {formatTime(timeRemaining)}
+        <div className="mb-6">
+          <div className="flex items-center mb-4">
+            <span className="mr-2 text-2xl">
+              {categoryIcons[currentQuestion.category]}
+            </span>
+            <h2 className="text-xl font-semibold">
+              {currentQuestion.text}
+            </h2>
           </div>
-          <button
-            onClick={handleSubmitTest}
-            disabled={!isTestComplete()}
-            className={`px-6 py-2 rounded-lg transition-colors ${
-              isTestComplete()
-                ? 'bg-green-500 text-white hover:bg-green-600'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
+
+          <div className="space-y-4">
+            {currentQuestion.options.map((option, index) => (
+              <button
+                key={index}
+                onClick={() => handleOptionSelect(index)}
+                className={`
+                  w-full text-left p-4 rounded-lg transition-colors duration-200
+                  ${userAnswers.some(
+                    answer => 
+                      answer.questionId === currentQuestion.id && 
+                      answer.selectedOption === index
+                  ) 
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-gray-100 hover:bg-blue-100'
+                  }
+                `}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-between mt-8">
+          {currentQuestionIndex > 0 && (
+            <button 
+              onClick={goToPreviousQuestion}
+              className="flex items-center bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
+            >
+              <ArrowLeft className="mr-2" /> Anterior
+            </button>
+          )}
+
+          <button 
+            onClick={goToNextQuestion}
+            className={`
+              flex items-center 
+              ${currentQuestionIndex === test.questions.length - 1 
+                ? 'bg-green-500 text-white' 
+                : 'bg-blue-500 text-white'
+              } 
+              px-4 py-2 rounded-lg hover:opacity-90 ml-auto
+            `}
           >
-            Enviar Test
+            {currentQuestionIndex === test.questions.length - 1 
+              ? 'Enviar Test' 
+              : 'Siguiente'
+            } 
+            <ArrowRight className="ml-2" />
           </button>
         </div>
       </div>

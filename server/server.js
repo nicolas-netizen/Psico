@@ -1169,9 +1169,10 @@ app.post('/tests/generate', (req, res) => {
 
 app.post('/tests/submit', (req, res) => {
   try {
-    const { testId, userAnswers, userId } = req.body;
-    
-    // Find the test
+    const { testId } = req.params;
+    const { userAnswers } = req.body;
+
+    // Read the test to get correct answers
     const tests = readJsonFile(TESTS_FILE);
     const test = tests.find(t => t.id === testId);
 
@@ -1179,22 +1180,42 @@ app.post('/tests/submit', (req, res) => {
       return res.status(404).json({ message: 'Test not found' });
     }
 
-    // Calculate test result
-    const testResult = TestService.calculateTestScore(test, userAnswers);
-    
-    // Add user and timestamp information
-    testResult.userId = userId;
-    testResult.completedAt = new Date();
+    // Mark answers as correct or incorrect
+    const markedAnswers = userAnswers.map(answer => {
+      const testQuestion = test.questions.find(q => q.id === answer.questionId);
+      
+      return {
+        ...answer,
+        isCorrect: testQuestion 
+          ? testQuestion.correctOption === answer.selectedOption 
+          : false
+      };
+    });
 
-    // Save test result
-    const testResults = readJsonFile(TEST_RESULTS_FILE);
-    testResults.push(testResult);
+    // Read existing test results
+    let testResults = readJsonFile(TEST_RESULTS_FILE);
+
+    // Create a new test result entry
+    const newTestResult = {
+      id: `result-${Date.now()}`,
+      testId,
+      userId: req.body.userId || 'unknown', // You might want to get this from authentication
+      answers: markedAnswers,
+      timestamp: new Date().toISOString(),
+      score: calculateTestScore(markedAnswers)
+    };
+
+    // Add the new test result
+    testResults.push(newTestResult);
+
+    // Write back to file
     writeJsonFile(TEST_RESULTS_FILE, testResults);
 
-    res.status(200).json(testResult);
+    // Return the test result
+    res.status(200).json(newTestResult);
   } catch (error) {
-    console.error('Test submission error:', error);
-    res.status(500).json({ message: 'Error submitting test', error: error.message });
+    console.error('Error submitting test:', error);
+    res.status(500).json({ message: 'Error al enviar el test', error: error.message });
   }
 });
 
@@ -1324,3 +1345,108 @@ app.post('/tests/generate', (req, res) => {
     });
   }
 });
+
+app.post('/tests/:testId/submit', (req, res) => {
+  try {
+    const { testId } = req.params;
+    const { userAnswers } = req.body;
+
+    // Read the test to get correct answers
+    const tests = readJsonFile(TESTS_FILE);
+    const test = tests.find(t => t.id === testId);
+
+    if (!test) {
+      return res.status(404).json({ message: 'Test not found' });
+    }
+
+    // Mark answers as correct or incorrect
+    const markedAnswers = userAnswers.map(answer => {
+      const testQuestion = test.questions.find(q => q.id === answer.questionId);
+      
+      return {
+        ...answer,
+        isCorrect: testQuestion 
+          ? testQuestion.correctOption === answer.selectedOption 
+          : false
+      };
+    });
+
+    // Read existing test results
+    let testResults = readJsonFile(TEST_RESULTS_FILE);
+
+    // Create a new test result entry
+    const newTestResult = {
+      id: `result-${Date.now()}`,
+      testId,
+      userId: req.body.userId || 'unknown', // You might want to get this from authentication
+      answers: markedAnswers,
+      timestamp: new Date().toISOString(),
+      score: calculateTestScore(markedAnswers)
+    };
+
+    // Add the new test result
+    testResults.push(newTestResult);
+
+    // Write back to file
+    writeJsonFile(TEST_RESULTS_FILE, testResults);
+
+    // Return the test result
+    res.status(200).json(newTestResult);
+  } catch (error) {
+    console.error('Error submitting test:', error);
+    res.status(500).json({ message: 'Error al enviar el test', error: error.message });
+  }
+});
+
+// Helper function to calculate test score
+function calculateTestScore(userAnswers) {
+  // Assuming userAnswers is an array of answer objects
+  const totalQuestions = userAnswers.length;
+  const correctAnswers = userAnswers.filter(answer => answer.isCorrect).length;
+  const percentageScore = totalQuestions > 0 
+    ? Math.round((correctAnswers / totalQuestions) * 100) 
+    : 0;
+
+  return {
+    score: correctAnswers,
+    totalQuestions,
+    correctAnswers,
+    percentageScore,
+    categoryPerformance: calculateCategoryPerformance(userAnswers),
+    strengths: [],  // You might want to implement actual strength detection
+    weaknesses: []  // You might want to implement actual weakness detection
+  };
+}
+
+// Helper function to calculate category performance
+function calculateCategoryPerformance(userAnswers) {
+  const categoryPerformance = {};
+
+  // Group answers by category
+  userAnswers.forEach(answer => {
+    const category = answer.category || 'uncategorized';
+    
+    if (!categoryPerformance[category]) {
+      categoryPerformance[category] = {
+        totalQuestions: 0,
+        correctAnswers: 0,
+        percentageScore: 0
+      };
+    }
+
+    categoryPerformance[category].totalQuestions++;
+    if (answer.isCorrect) {
+      categoryPerformance[category].correctAnswers++;
+    }
+  });
+
+  // Calculate percentage for each category
+  Object.keys(categoryPerformance).forEach(category => {
+    const { totalQuestions, correctAnswers } = categoryPerformance[category];
+    categoryPerformance[category].percentageScore = totalQuestions > 0 
+      ? Math.round((correctAnswers / totalQuestions) * 100) 
+      : 0;
+  });
+
+  return categoryPerformance;
+}

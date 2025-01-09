@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useGlobalAuth } from './hooks/useGlobalAuth';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -26,6 +26,17 @@ import AptitudeTestSelection from './components/test/AptitudeTestSelection';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/grid-pattern.css';
+
+const ConditionalFooter: React.FC = () => {
+  const location = useLocation();
+  
+  // Do not show footer on take-test page
+  if (location.pathname === '/take-test') {
+    return null;
+  }
+  
+  return <Footer />;
+};
 
 const App: React.FC = () => {
   return (
@@ -133,7 +144,7 @@ const App: React.FC = () => {
                   </Routes>
                 </ErrorBoundary>
               </main>
-              <Footer />
+              <ConditionalFooter />
               <ToastContainer 
                 position="top-right"
                 autoClose={3000}

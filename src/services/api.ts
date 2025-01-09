@@ -301,15 +301,39 @@ export const api = {
     }
   },
 
-  submitTestAnswers: async (testId: string, userAnswers: UserAnswer[]): Promise<DetailedTestResult> => {
+  getTestResults: async (testResultId: string) => {
     try {
-      const response = await apiClient.post(`/tests/${testId}/submit`, { 
-        testId, 
-        userAnswers 
+      const response = await apiClient.get(`/tests/results/${testResultId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching test results:', error);
+      throw error;
+    }
+  },
+
+  getTestById: async (testId: string) => {
+    try {
+      const response = await apiClient.get(`/tests/${testId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching test:', error);
+      throw error;
+    }
+  },
+
+  submitTestAnswers: async (testId: string, answers: any[]) => {
+    try {
+      const userId = getCurrentUser()?.id;
+      const response = await apiClient.post(`/tests/${testId}/submit`, {
+        userId,
+        userAnswers: answers.map(answer => ({
+          questionId: answer.questionId,
+          selectedOption: answer.selectedOption
+        }))
       });
       return response.data;
     } catch (error) {
-      handleApiError(error);
+      console.error('Error submitting test answers:', error);
       throw error;
     }
   },
@@ -347,6 +371,11 @@ export const api = {
     }
   },
 };
+
+// Individual exports for easier importing
+export const getTestById = api.getTestById;
+export const submitTestAnswers = api.submitTestAnswers;
+export const getTestResults = api.getTestResults;
 
 // Utility function to get current logged-in user
 function getCurrentUser(): User | null {

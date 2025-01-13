@@ -30,11 +30,17 @@ export const TestsPage: React.FC = () => {
 
   const handleTestSelection = async (testId: string) => {
     try {
+      console.log('Iniciando test con ID:', testId);
       const test = await api.getTestById(testId);
+      if (!test) {
+        throw new Error('No se pudo cargar el test');
+      }
+      console.log('Test cargado:', test);
       setSelectedTest(test);
+      setError(null);
     } catch (err) {
+      console.error('Error al cargar el test:', err);
       setError('No se pudo cargar el test seleccionado');
-      console.error(err);
     }
   };
 
@@ -62,14 +68,19 @@ export const TestsPage: React.FC = () => {
       {!selectedTest ? (
         <div className="test-selector">
           {availableTests.map(test => (
-            <div 
-              key={test.id} 
-              className="test-card"
-              onClick={() => handleTestSelection(test.id)}
-            >
+            <div key={test.id} className="test-card">
               <h3>{test.name}</h3>
-              <p>Materia: {test.subject}</p>
+              <p>Categoría: {test.subject}</p>
               <p>Dificultad: {test.difficulty}</p>
+              <button 
+                className="comenzar-test-btn"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleTestSelection(test.id);
+                }}
+              >
+                Comenzar Test
+              </button>
             </div>
           ))}
         </div>

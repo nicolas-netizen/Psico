@@ -14,6 +14,7 @@ export const InteractiveTest: React.FC<InteractiveTestProps> = ({ test, onSubmit
   const [timeRemaining, setTimeRemaining] = useState(test.timeLimit || 30);
 
   useEffect(() => {
+    console.log('Test iniciado:', test);
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 0) {
@@ -25,10 +26,14 @@ export const InteractiveTest: React.FC<InteractiveTestProps> = ({ test, onSubmit
       });
     }, 60000); // Cada minuto
 
-    return () => clearInterval(timer);
-  }, []);
+    return () => {
+      console.log('Limpiando timer del test');
+      clearInterval(timer);
+    };
+  }, [test]);
 
   const handleAnswerChange = (questionId: string, selectedOption?: string, openAnswer?: string) => {
+    console.log('Respondiendo pregunta:', { questionId, selectedOption, openAnswer });
     const existingAnswerIndex = answers.findIndex(a => a.questionId === questionId);
     
     if (existingAnswerIndex !== -1) {
@@ -53,9 +58,13 @@ export const InteractiveTest: React.FC<InteractiveTestProps> = ({ test, onSubmit
   };
 
   const handleSubmitTest = () => {
-    if (user) {
-      onSubmit(answers);
+    if (!user) {
+      console.error('No hay usuario autenticado');
+      return;
     }
+    
+    console.log('Enviando respuestas:', answers);
+    onSubmit(answers);
   };
 
   const renderQuestionByType = (question: TestQuestion) => {
@@ -122,37 +131,40 @@ export const InteractiveTest: React.FC<InteractiveTestProps> = ({ test, onSubmit
 
   return (
     <div className="interactive-test">
-      <h2>{test.name}</h2>
-      <div className="test-timer">
-        Tiempo restante: {timeRemaining} minutos
+      <div className="test-header">
+        <h2>{test.name}</h2>
+        <p>Tiempo restante: {timeRemaining} minutos</p>
       </div>
 
       <div className="question-container">
-        <h3>{currentQuestion.text}</h3>
+        <h3>Pregunta {currentQuestionIndex + 1} de {test.questions.length}</h3>
+        <p>{currentQuestion.text}</p>
         {renderQuestionByType(currentQuestion)}
       </div>
 
-      <div className="navigation-buttons">
+      <div className="test-navigation">
         <button 
-          onClick={handlePreviousQuestion} 
+          onClick={handlePreviousQuestion}
           disabled={currentQuestionIndex === 0}
         >
           Anterior
         </button>
         
-        {currentQuestionIndex < test.questions.length - 1 ? (
-          <button onClick={handleNextQuestion}>
-            Siguiente
-          </button>
-        ) : (
-          <button onClick={handleSubmitTest}>
+        {currentQuestionIndex === test.questions.length - 1 ? (
+          <button 
+            onClick={handleSubmitTest}
+            className="submit-test-btn"
+          >
             Finalizar Test
           </button>
+        ) : (
+          <button 
+            onClick={handleNextQuestion}
+            className="next-question-btn"
+          >
+            Siguiente
+          </button>
         )}
-      </div>
-
-      <div className="progress">
-        Pregunta {currentQuestionIndex + 1} de {test.questions.length}
       </div>
     </div>
   );

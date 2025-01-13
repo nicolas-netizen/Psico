@@ -3,13 +3,13 @@
     "id": "admin-1",
     "email": "admin@chapiri.com",
     "name": "Admin",
-    "password": "$2a$10$f3Eqo3kngkRlStDEcUctHucHuICTVgOYQEuKDUymijkz8dEzUXeIS",
+    "password": "$2a$10$MP7mQ6A3gmyG0MA59tmX8uGNtp7DRo997msDwmJ4.dx6c8zPDWGMu",
     "role": "admin",
-    "createdAt": "2025-01-09T17:42:15.644Z",
+    "createdAt": "2025-01-13T17:28:28.900Z",
     "subscription": {
       "planId": "plan-1",
       "planName": "Administrador",
-      "purchaseDate": "2025-01-09T17:42:15.645Z",
+      "purchaseDate": "2025-01-13T17:28:28.903Z",
       "features": [
         "Acceso total al sistema"
       ]

@@ -1,24 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { 
   Test, 
-  TestQuestion, 
-  AptitudeCategory, 
-  Aptitude 
+  TestQuestion,
+  AptitudeCategory,
+  Aptitude,
+  QuestionType
 } from '../../types/Test';
-import api from '../../services/api';
-import { Trash2, Plus } from 'lucide-react';
+import { Plan, getPlans } from '../../services/firestore';
+import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
-// Agrupación de categorías por aptitud
 const APTITUDE_CATEGORIES = {
-  [Aptitude.LINGUISTIC_INTELLIGENCE]: [
+  VERBAL: [
     AptitudeCategory.SYNONYMS,
     AptitudeCategory.ANTONYMS,
     AptitudeCategory.VERBAL_ANALOGIES,
     AptitudeCategory.SPELLING,
     AptitudeCategory.PROVERBS
   ],
-  [Aptitude.MATHEMATICAL_LOGIC]: [
+  NUMERICAL: [
     AptitudeCategory.BASIC_OPERATIONS,
     AptitudeCategory.REASONING_PROBLEMS,
     AptitudeCategory.AREA_PERIMETER_CALCULATION,
@@ -26,20 +28,20 @@ const APTITUDE_CATEGORIES = {
     AptitudeCategory.PROPORTIONS,
     AptitudeCategory.PERCENTAGES
   ],
-  [Aptitude.SPATIAL_INTELLIGENCE]: [
+  SPATIAL: [
     AptitudeCategory.FIGURE_FOLDING,
     AptitudeCategory.PERSPECTIVE_VISUALIZATION,
     AptitudeCategory.FIGURE_ROTATION,
     AptitudeCategory.BLOCK_COUNTING
   ],
-  [Aptitude.BODILY_KINESTHETIC]: [
+  MECHANICAL: [
     AptitudeCategory.PHYSICAL_MECHANICAL_TESTS,
     AptitudeCategory.MECHANISMS,
     AptitudeCategory.BALANCE_SYSTEMS,
     AptitudeCategory.PULLEYS,
     AptitudeCategory.GEARS
   ],
-  [Aptitude.INTRAPERSONAL_INTELLIGENCE]: [
+  PERCEPTUAL: [
     AptitudeCategory.FILE_ORGANIZATION,
     AptitudeCategory.ALPHABETICAL_ORDERING,
     AptitudeCategory.FATIGUE_RESISTANCE,
@@ -47,369 +49,318 @@ const APTITUDE_CATEGORIES = {
   ]
 };
 
-interface TestFormProps {
-  initialTest?: Test | null;
-  onTestCreated?: (test: Test) => void;
-  onClose?: () => void;
-}
-
-const TestForm: React.FC<TestFormProps> = ({ 
-  initialTest = null, 
-  onTestCreated, 
-  onClose 
-}) => {
-  const [plans, setPlans] = useState<any[]>([]);
-  const [formData, setFormData] = useState<Partial<Test>>({
-    title: initialTest?.title || '',
-    description: initialTest?.description || '',
-    questions: initialTest?.questions || [],
-    plans: initialTest?.plans || [],
-    category: initialTest?.category || '',
-    difficulty: initialTest?.difficulty || 'basic',
-    timeLimit: initialTest?.timeLimit || 30,
-    aptitudeCategory: initialTest?.aptitudeCategory || null
+const TestForm: React.FC = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [test, setTest] = useState<Partial<Test>>({
+    title: '',
+    description: '',
+    questions: [],
+    plans: [],
+    category: '',
+    timeLimit: 30
   });
-
-  const [selectedAptitude, setSelectedAptitude] = useState<Aptitude | null>(
-    initialTest?.category as Aptitude || null
-  );
+  const [currentQuestion, setCurrentQuestion] = useState<Partial<TestQuestion>>({
+    text: '',
+    options: ['', '', '', ''],
+    correctAnswer: 0
+  });
+  const [selectedAptitude, setSelectedAptitude] = useState<string>('');
+  const [selectedCategories, setSelectedCategories] = useState<AptitudeCategory[]>([]);
 
   useEffect(() => {
-    // Fetch available plans when component mounts
     const fetchPlans = async () => {
       try {
-        const fetchedPlans = await api.getPlans();
+        const fetchedPlans = await getPlans();
         setPlans(fetchedPlans);
       } catch (error) {
-        toast.error('No se pudieron cargar los planes');
+        toast.error('Error al cargar los planes');
       }
     };
-
     fetchPlans();
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setTest(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleAptitudeChange = (aptitude: Aptitude) => {
+  const handleAptitudeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const aptitude = e.target.value;
     setSelectedAptitude(aptitude);
-    setFormData(prev => ({
-      ...prev,
-      category: aptitude,
-      aptitudeCategory: null  // Reset specific category
-    }));
+    setSelectedCategories([]);
+    setTest(prev => ({ ...prev, category: aptitude }));
   };
 
-  const handleAptitudeCategoryChange = (category: AptitudeCategory) => {
-    setFormData(prev => ({
-      ...prev,
-      aptitudeCategory: category
-    }));
-  };
-
-  const handlePlanSelection = (planId: string) => {
-    setFormData(prev => {
-      const updatedPlans = prev.plans?.includes(planId)
-        ? prev.plans?.filter(id => id !== planId)
-        : [...(prev.plans || []), planId];
-      
-      return { ...prev, plans: updatedPlans };
+  const handleCategoryToggle = (category: AptitudeCategory) => {
+    setSelectedCategories(prev => {
+      if (prev.includes(category)) {
+        return prev.filter(c => c !== category);
+      }
+      return [...prev, category];
     });
   };
 
-  const addQuestion = () => {
-    const newQuestion: TestQuestion = {
-      id: `question-${Date.now()}`,
-      text: '',
-      options: ['', '', '', ''],
-      correctAnswer: 0
-    };
-
-    setFormData(prev => ({
-
-      ...prev,
-      questions: [...(prev.questions || []), newQuestion]
-    }));
+  const handlePlanToggle = (planId: string) => {
+    setTest(prev => {
+      const plans = prev.plans || [];
+      if (plans.includes(planId)) {
+        return { ...prev, plans: plans.filter(id => id !== planId) };
+      }
+      return { ...prev, plans: [...plans, planId] };
+    });
   };
 
-  const updateQuestion = (index: number, updates: Partial<TestQuestion>) => {
-    const updatedQuestions = [...(formData.questions || [])];
-    updatedQuestions[index] = { ...updatedQuestions[index], ...updates };
-
-    setFormData(prev => ({
-      ...prev,
-      questions: updatedQuestions
-    }));
-  };
-
-  const removeQuestion = (index: number) => {
-    const updatedQuestions = formData.questions?.filter((_, i) => i !== index);
-    
-    setFormData(prev => ({
-      ...prev,
-      questions: updatedQuestions
-    }));
+  const handleQuestionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, index?: number) => {
+    const { name, value } = e.target;
+    if (typeof index === 'number') {
+      setCurrentQuestion(prev => ({
+        ...prev,
+        options: prev.options?.map((opt, i) => i === index ? value : opt)
+      }));
+    } else {
+      setCurrentQuestion(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate form data
-    if (!formData.title || !formData.description || 
-        !formData.plans || formData.plans.length === 0 ||
-        !formData.questions || formData.questions.length === 0) {
-      toast.error('Por favor complete todos los campos');
-      return;
-    }
-
-    // Validate questions
-    const invalidQuestions = formData.questions.some(q => 
-      !q.text || q.options.some(opt => !opt)
-    );
-
-    if (invalidQuestions) {
-      toast.error('Por favor complete todas las preguntas y opciones');
-      return;
-    }
+    setLoading(true);
 
     try {
-      const testData: Partial<Test> = {
-        ...formData,
-        id: initialTest?.id || `test-${Date.now()}`,
-        createdAt: initialTest?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+      // Validaciones
+      if (!test.title || !test.description || !test.category || test.plans.length === 0) {
+        toast.error('Por favor completa todos los campos requeridos');
+        return;
+      }
+
+      if (test.questions.length === 0) {
+        toast.error('Debes agregar al menos una pregunta al test');
+        return;
+      }
+
+      // Validar que cada pregunta tenga texto y opciones válidas
+      const invalidQuestions = test.questions.some(q => 
+        !q.text || q.options.some(opt => !opt) || q.correctAnswer === undefined
+      );
+
+      if (invalidQuestions) {
+        toast.error('Todas las preguntas deben tener texto, opciones y una respuesta correcta');
+        return;
+      }
+
+      const testData = {
+        ...test,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        status: 'active',
+        categories: selectedCategories,
       };
 
-      let result;
-      if (initialTest) {
-        // Update existing test
-        result = await api.updateTest(testData.id!, testData);
-      } else {
-        // Create new test
-        result = await api.createTest(testData);
-      }
+      const docRef = await addDoc(collection(db, 'tests'), testData);
       
-      toast.success(initialTest ? 'Test actualizado exitosamente' : 'Test creado exitosamente');
-      
-      // Call callback if provided
-      if (onTestCreated) {
-        onTestCreated(result);
-      }
-
-      // Close the form
-      if (onClose) {
-        onClose();
-      }
+      toast.success('Test creado exitosamente');
+      navigate('/admin');
     } catch (error) {
-      toast.error(initialTest ? 'Error al actualizar el test' : 'Error al crear el test');
-      console.error(error);
+      console.error('Error al crear el test:', error);
+      toast.error('Error al crear el test');
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleQuestionSubmit = () => {
+    if (!currentQuestion.text || currentQuestion.options.some(opt => !opt)) {
+      toast.error('La pregunta debe tener texto y todas las opciones completadas');
+      return;
+    }
+
+    if (currentQuestion.correctAnswer === undefined) {
+      toast.error('Debes seleccionar una respuesta correcta');
+      return;
+    }
+
+    setTest(prev => ({
+      ...prev,
+      questions: [...(prev.questions || []), currentQuestion as TestQuestion]
+    }));
+
+    // Limpiar el formulario de pregunta actual
+    setCurrentQuestion({
+      text: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0
+    });
+
+    toast.success('Pregunta agregada exitosamente');
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-gray-700 font-medium mb-2">Título del Test</label>
-        <input
-          type="text"
-          name="title"
-          value={formData.title}
-          onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Ingrese el título del test"
-          required
-        />
-      </div>
+    <div className="max-w-4xl mx-auto p-6">
+      <h2 className="text-2xl font-bold mb-6">Crear Nuevo Test</h2>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Título</label>
+          <input
+            type="text"
+            name="title"
+            value={test.title}
+            onChange={handleInputChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            required
+          />
+        </div>
 
-      <div>
-        <label className="block text-gray-700 font-medium mb-2">Descripción</label>
-        <textarea
-          name="description"
-          value={formData.description}
-          onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Describa el test"
-          rows={3}
-          required
-        />
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Descripción</label>
+          <textarea
+            name="description"
+            value={test.description}
+            onChange={handleInputChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            rows={3}
+            required
+          />
+        </div>
 
-      <div>
-        <label className="block text-gray-700 font-medium mb-2">Tiempo Límite (minutos)</label>
-        <input
-          type="number"
-          name="timeLimit"
-          value={formData.timeLimit}
-          onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          min={5}
-          max={120}
-        />
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Aptitud</label>
+          <select
+            value={selectedAptitude}
+            onChange={handleAptitudeChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            required
+          >
+            <option value="">Seleccione una aptitud</option>
+            {Object.keys(APTITUDE_CATEGORIES).map(aptitude => (
+              <option key={aptitude} value={aptitude}>
+                {aptitude}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      <div>
-        <label className="block text-gray-700 font-medium mb-2">Planes Disponibles</label>
-        <div className="flex flex-wrap gap-2">
-          {plans.length === 0 ? (
-            <p className="text-gray-500">No hay planes disponibles</p>
-          ) : (
-            plans.map((plan) => (
-              <div key={plan.id} className="flex items-center">
+        {selectedAptitude && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Categorías</label>
+            <div className="grid grid-cols-2 gap-2">
+              {APTITUDE_CATEGORIES[selectedAptitude as keyof typeof APTITUDE_CATEGORIES].map(category => (
+                <label key={category} className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedCategories.includes(category)}
+                    onChange={() => handleCategoryToggle(category)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>{category}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Planes Asociados</label>
+          <div className="grid grid-cols-2 gap-2">
+            {plans.map(plan => (
+              <label key={plan.id} className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  id={`plan-${plan.id}`}
-                  checked={formData.plans?.includes(plan.id)}
-                  onChange={() => handlePlanSelection(plan.id)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  checked={test.plans?.includes(plan.id)}
+                  onChange={() => handlePlanToggle(plan.id)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
-                <label 
-                  htmlFor={`plan-${plan.id}`} 
-                  className="ml-2 block text-sm text-gray-900"
-                >
-                  {plan.name}
-                </label>
-              </div>
-            )))
-          }
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-gray-700 font-medium mb-2">Aptitud</label>
-        <div className="flex flex-wrap gap-2">
-          {Object.values(Aptitude).map((aptitude) => (
-            <button
-              key={aptitude}
-              type="button"
-              onClick={() => handleAptitudeChange(aptitude)}
-              className={`px-4 py-2 rounded ${
-                selectedAptitude === aptitude 
-                  ? 'bg-blue-500 text-white' 
-                  : 'bg-gray-200 text-gray-700'
-              }`}
-            >
-              {aptitude}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {selectedAptitude && (
-        <div>
-          <label className="block text-gray-700 font-medium mb-2">Categoría de Aptitud</label>
-          <div className="flex flex-wrap gap-2">
-            {APTITUDE_CATEGORIES[selectedAptitude].map((category) => (
-              <button
-                key={category}
-                type="button"
-                onClick={() => handleAptitudeCategoryChange(category)}
-                className={`px-4 py-2 rounded ${
-                  formData.aptitudeCategory === category 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-200 text-gray-700'
-                }`}
-              >
-                {category}
-              </button>
+                <span>{plan.name}</span>
+              </label>
             ))}
           </div>
         </div>
-      )}
 
-      <div>
-        <div className="flex justify-between items-center mb-2">
-          <label className="block text-gray-700 font-medium">Preguntas</label>
-          <button
-            type="button"
-            onClick={addQuestion}
-            className="flex items-center text-blue-600 hover:text-blue-800"
-          >
-            <Plus className="mr-1" size={16} /> Añadir Pregunta
-          </button>
-        </div>
-        {formData.questions?.map((question, index) => (
-          <div 
-            key={question.id} 
-            className="border border-gray-200 rounded-md p-4 mb-4 relative"
-          >
-            <button
-              type="button"
-              onClick={() => removeQuestion(index)}
-              className="absolute top-2 right-2 text-red-500 hover:text-red-700"
-            >
-              <Trash2 size={16} />
-            </button>
-            <div className="mb-3">
-              <label className="block text-gray-700 font-medium mb-2">Texto de la Pregunta</label>
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-medium mb-4">Agregar Pregunta</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Pregunta</label>
               <input
                 type="text"
-                value={question.text}
-                onChange={(e) => updateQuestion(index, { text: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Escriba la pregunta"
-                required
+                name="text"
+                value={currentQuestion.text}
+                onChange={handleQuestionChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-gray-700 font-medium mb-2">Opciones</label>
-              <div className="grid grid-cols-2 gap-2">
-                {question.options.map((option, optIndex) => (
-                  <div key={optIndex} className="flex items-center">
-                    <input
-                      type="text"
-                      value={option}
-                      onChange={(e) => {
-                        const newOptions = [...question.options];
-                        newOptions[optIndex] = e.target.value;
-                        updateQuestion(index, { options: newOptions });
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder={`Opción ${optIndex + 1}`}
-                      required
-                    />
-                    <input
-                      type="radio"
-                      name={`correct-${question.id}`}
-                      checked={question.correctAnswer === optIndex}
-                      onChange={() => updateQuestion(index, { correctAnswer: optIndex })}
-                      className="ml-2"
-                    />
-                  </div>
-                ))}
-              </div>
+            
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Opciones</label>
+              {currentQuestion.options?.map((option, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => handleQuestionChange(e, index)}
+                    className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder={`Opción ${index + 1}`}
+                  />
+                  <input
+                    type="radio"
+                    name="correctAnswer"
+                    checked={currentQuestion.correctAnswer === index}
+                    onChange={() => setCurrentQuestion(prev => ({ ...prev, correctAnswer: index }))}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleQuestionSubmit}
+              className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Agregar Pregunta
+            </button>
+          </div>
+        </div>
+
+        {test.questions && test.questions.length > 0 && (
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-medium mb-4">Preguntas Agregadas</h3>
+            <div className="space-y-4">
+              {test.questions.map((question, index) => (
+                <div key={question.id} className="p-4 bg-gray-50 rounded-md">
+                  <p className="font-medium">{index + 1}. {question.text}</p>
+                  <ul className="mt-2 space-y-1">
+                    {question.options.map((option, optIndex) => (
+                      <li key={optIndex} className={optIndex === question.correctAnswer ? 'text-green-600' : ''}>
+                        {optIndex + 1}. {option}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
+        )}
 
-      <div>
-        <label className="block text-gray-700 font-medium mb-2">Dificultad</label>
-        <select
-          name="difficulty"
-          value={formData.difficulty}
-          onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="basic">Básico</option>
-          <option value="intermediate">Intermedio</option>
-          <option value="advanced">Avanzado</option>
-        </select>
-      </div>
-
-      <div className="pt-4">
-        <button
-          type="submit"
-          className="w-full py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-        >
-          {initialTest ? 'Actualizar Test' : 'Crear Test'}
-        </button>
-      </div>
-    </form>
+        <div className="flex justify-end space-x-4">
+          <button
+            type="button"
+            onClick={() => navigate('/admin')}
+            className="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            {loading ? 'Guardando...' : 'Guardar Test'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 };
 

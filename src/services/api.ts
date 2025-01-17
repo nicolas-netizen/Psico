@@ -1,86 +1,115 @@
 import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
-import type { Plan, User, Test, UserAnswer, TestResult, TestConfiguration, DetailedTestResult } from '../types';
 
-// Function to read the current server port
-function getCurrentServerPort(): string {
-  try {
-    const possiblePaths = [
-      path.join(process.cwd(), 'server', 'current_port.txt'),
-      path.join(process.cwd(), 'current_port.txt')
-    ];
-
-    for (const portFilePath of possiblePaths) {
-      if (fs.existsSync(portFilePath)) {
-        return fs.readFileSync(portFilePath, 'utf8').trim();
-      }
-    }
-
-    console.warn('No port file found, using default port');
-    return '3001';
-  } catch (error) {
-    console.warn('Error reading server port:', error);
-    return '3001';
-  }
+interface LoginResponse {
+  user: any;
+  token: string;
 }
 
-// Determine base URL dynamically
-const BASE_URL = import.meta.env.VITE_API_URL || `http://localhost:${getCurrentServerPort()}`;
+interface RegisterData {
+  email: string;
+  password: string;
+  name: string;
+}
 
-// Create axios instance with comprehensive configuration
+interface Test {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  difficulty: number;
+  questions: any[];
+}
+
+interface Plan {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  features: string[];
+}
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+interface TestResult {
+  id: string;
+  testId: string;
+  userId: string;
+  score: number;
+  answers: any[];
+}
+
+interface TestConfiguration {
+  testId: string;
+  userId: string;
+  configuration: any;
+}
+
+interface DetailedTestResult {
+  id: string;
+  testId: string;
+  userId: string;
+  score: number;
+  answers: any[];
+  detailedResults: any[];
+}
+
+interface UserAnswer {
+  questionId: string;
+  selectedOption: string;
+}
+
+// Error handling
+const handleApiError = (error: any) => {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) {
+      return new Error('No se pudo conectar con el servidor. Verifica tu conexión de red.');
+    }
+    const message = error.response.data?.message || 'Error en la solicitud';
+    return new Error(message);
+  }
+  return new Error('Error inesperado');
+};
+
+// Create axios instance
 const apiClient = axios.create({
-  baseURL: BASE_URL,
-  timeout: 10000,
-  withCredentials: true,
+  baseURL: 'http://localhost:3001',
   headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    'Content-Type': 'application/json'
   }
 });
 
-// Request interceptor for logging and debugging
+// Request interceptor
 apiClient.interceptors.request.use(
   (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     console.log('API Request:', config);
     return config;
   },
   (error) => {
-    console.error('API Request Error:', error);
+    console.error('Request Error:', error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor for logging and error handling
+// Response interceptor
 apiClient.interceptors.response.use(
-  (response) => {
-    console.log('API Response:', response);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('API Response Error:', error);
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
     return Promise.reject(error);
   }
 );
-
-// Centralized error handling
-function handleApiError(error: any) {
-  if (axios.isAxiosError(error)) {
-    if (error.response) {
-      console.error('Server Error:', error.response.data);
-      throw new Error(error.response.data.message || 'Error en la solicitud');
-    } else if (error.request) {
-      console.error('Network Error:', error.request);
-      throw new Error('No se pudo conectar con el servidor. Verifica tu conexión de red.');
-    } else {
-      console.error('Request Setup Error:', error.message);
-      throw new Error('Error al procesar la solicitud. Intenta nuevamente.');
-    }
-  } else {
-    console.error('Unexpected Error:', error);
-    throw new Error('Error inesperado. Por favor, contacta soporte.');
-  }
-}
 
 // API methods
 export const api = {
@@ -184,16 +213,14 @@ export const api = {
     }
   },
 
-  login: async (email: string, password: string): Promise<User> => {
+  login: async (email: string, password: string): Promise<{ user: User; token: string }> => {
     try {
-      const response = await apiClient.post('/login', { email, password });
-      return response.data.user;
+      const response = await apiClient.post('/api/auth/login', { email, password });
+      return response.data;
     } catch (error) {
-      handleApiError(error);
+      throw handleApiError(error);
     }
   },
-
-  // Other methods...
 
   getUserTestHistory: async (userId: string) => {
     try {
@@ -311,13 +338,12 @@ export const api = {
     }
   },
 
-  getTestById: async (testId: string) => {
+  getTestById: async (testId: string): Promise<Test> => {
     try {
-      const response = await apiClient.get(`/tests/${testId}`);
+      const response = await apiClient.get(`/api/tests/${testId}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching test:', error);
-      throw error;
+      throw handleApiError(error);
     }
   },
 
@@ -370,6 +396,140 @@ export const api = {
       handleApiError(error);
     }
   },
+
+  getAvailableTests: async (): Promise<Test[]> => {
+    try {
+      const response = await apiClient.get('/tests/available');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getUserStats: async (): Promise<any> => {
+    try {
+      const response = await apiClient.get('/api/users/stats');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  deleteTest: async (testId: string): Promise<void> => {
+    try {
+      await apiClient.delete(`/tests/${testId}`);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getRecentTests: async (): Promise<Test[]> => {
+    try {
+      const response = await apiClient.get('/api/tests/recent');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getUserPlan: async (): Promise<any> => {
+    try {
+      const response = await apiClient.get('/api/users/plan');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getTestById: async (testId: string): Promise<Test> => {
+    try {
+      const response = await apiClient.get(`/api/tests/${testId}`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  submitTestAnswers: async (testId: string, answers: any[]): Promise<any> => {
+    try {
+      const response = await apiClient.post(`/api/tests/${testId}/submit`, { answers });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getAvailableTests: async (): Promise<Test[]> => {
+    try {
+      const response = await apiClient.get('/api/tests/available');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  login: async (email: string, password: string): Promise<LoginResponse> => {
+    try {
+      const response = await apiClient.post('/api/auth/login', { email, password });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  register: async (userData: RegisterData): Promise<any> => {
+    try {
+      const response = await apiClient.post('/api/auth/register', userData);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getUserStats: async (): Promise<any> => {
+    try {
+      const response = await apiClient.get('/api/users/stats');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getRecentTests: async (): Promise<Test[]> => {
+    try {
+      const response = await apiClient.get('/api/tests/recent');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getTests: async (): Promise<Test[]> => {
+    try {
+      const response = await apiClient.get('/api/tests');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getUserPlan: async (): Promise<any> => {
+    try {
+      const response = await apiClient.get('/api/users/plan');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  submitTest: async (testId: string, answers: any[]): Promise<any> => {
+    try {
+      const response = await apiClient.post(`/api/tests/${testId}/submit`, { answers });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
 };
 
 // Individual exports for easier importing

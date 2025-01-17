@@ -1,184 +1,161 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { 
-  Aptitude, 
-  AptitudeTest, 
-  AptitudeCategory, 
-  AptitudeDifficulty 
-} from '../../types/Test';
+import { Brain, Book, Calculator, Lightbulb } from 'lucide-react';
+import { api } from '../../services/api';
 
-// Aptitude Icons mapping
-const aptitudeIcons = {
-  [Aptitude.SPATIAL_INTELLIGENCE]: '🌐',
-  [Aptitude.MATHEMATICAL_LOGIC]: '🔢',
-  [Aptitude.LINGUISTIC_INTELLIGENCE]: '📚',
-  [Aptitude.MUSICAL_INTELLIGENCE]: '🎵',
-  [Aptitude.BODILY_KINESTHETIC]: '🏃',
-  [Aptitude.INTERPERSONAL_INTELLIGENCE]: '👥',
-  [Aptitude.INTRAPERSONAL_INTELLIGENCE]: '🧘',
-  [Aptitude.NATURALISTIC_INTELLIGENCE]: '🌿',
-  [Aptitude.EMOTIONAL_INTELLIGENCE]: '❤️'
-};
+interface Test {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  difficulty: string;
+}
 
-const difficultyColors = {
-  [AptitudeDifficulty.EASY]: 'bg-green-100 text-green-800',
-  [AptitudeDifficulty.MEDIUM]: 'bg-yellow-100 text-yellow-800',
-  [AptitudeDifficulty.HARD]: 'bg-red-100 text-red-800'
+const categoryIcons = {
+  'verbal': Book,
+  'numerical': Calculator,
+  'logical': Brain,
+  'general': Lightbulb,
 };
 
 const AptitudeTestSelection: React.FC = () => {
   const navigate = useNavigate();
-  const { fetchAptitudeTests, generateTest } = useAuth();
-  const [aptitudeTests, setAptitudeTests] = useState<AptitudeTest[]>([]);
-  const [selectedAptitude, setSelectedAptitude] = useState<Aptitude | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<AptitudeCategory | null>(null);
+  const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadTests = async () => {
+    const fetchTests = async () => {
       try {
-        const tests = await fetchAptitudeTests();
-        setAptitudeTests(tests);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching aptitude tests:', error);
+        const response = await api.getTests();
+        setTests(response);
+      } catch (err) {
+        console.error('Error fetching tests:', err);
+        setError('Error al cargar los tests');
+      } finally {
         setLoading(false);
       }
     };
 
-    loadTests();
-  }, [fetchAptitudeTests]);
+    fetchTests();
+  }, []);
 
-  const handleStartRandomTest = async () => {
-    try {
-      const test = await generateTest({ 
-        type: 'random',
-        requiredCategories: Object.values(Aptitude)
-      });
-      navigate('/take-test', { state: { test } });
-    } catch (error) {
-      console.error('Error generating random test:', error);
-    }
-  };
+  const categories = Array.from(new Set(tests.map(test => test.category)));
 
-  const handleStartAptitudeTest = async (aptitude: Aptitude) => {
-    setSelectedAptitude(aptitude);
-    setSelectedCategory(null);
-  };
-
-  const handleStartCategoryTest = async (category: AptitudeCategory) => {
-    try {
-      const test = await generateTest({ 
-        type: 'category',
-        specificCategory: category 
-      });
-      navigate('/take-test', { state: { test } });
-    } catch (error) {
-      console.error(`Error generating ${category} test:`, error);
-    }
-  };
+  const filteredTests = selectedCategory
+    ? tests.filter(test => test.category === selectedCategory)
+    : tests;
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-          <p className="mt-4 text-gray-600">Cargando tests de aptitud...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#91c26a] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando tests...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600">{error}</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="mt-4 px-4 py-2 bg-[#91c26a] text-white rounded hover:bg-[#6ea844]"
+          >
+            Volver al Dashboard
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-8">
-      <div className="container mx-auto">
+    <div className="min-h-screen bg-gray-50 pt-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">
-            Selecciona tu Test de Aptitud
-          </h1>
-          <p className="text-gray-600">
-            Elige un test específico o realiza un test aleatorio para descubrir tus habilidades
+          <h1 className="text-3xl font-bold text-gray-900">Tests de Aptitud</h1>
+          <p className="mt-4 text-gray-600 max-w-2xl mx-auto">
+            Selecciona una categoría para ver los tests disponibles o explora todos los tests a continuación.
           </p>
         </div>
 
-        {/* Random Test Option */}
-        <div className="mb-12 text-center">
-          <button 
-            onClick={handleStartRandomTest}
-            className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-full text-xl font-semibold hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg"
+        {/* Category Filters */}
+        <div className="flex flex-wrap justify-center gap-4 mb-12">
+          <button
+            onClick={() => setSelectedCategory(null)}
+            className={`px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors ${
+              !selectedCategory
+                ? 'bg-[#91c26a] text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
           >
-            🎲 Test Aleatorio Completo
+            Todos
           </button>
+          {categories.map(category => {
+            const Icon = categoryIcons[category as keyof typeof categoryIcons] || Brain;
+            return (
+              <button
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                className={`px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors ${
+                  selectedCategory === category
+                    ? 'bg-[#91c26a] text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span>{category}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Aptitude Selection or Category Selection */}
-        {!selectedAptitude ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {Object.values(Aptitude).map((aptitude) => (
-              <div 
-                key={aptitude}
-                className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden"
+        {/* Tests Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTests.map(test => {
+            const Icon = categoryIcons[test.category as keyof typeof categoryIcons] || Brain;
+            return (
+              <div
+                key={test.id}
+                className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6"
               >
-                <div className="p-6 text-center">
-                  <div className="text-6xl mb-4">
-                    {aptitudeIcons[aptitude]}
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">
-                    {aptitude}
-                  </h3>
-                  <button 
-                    onClick={() => handleStartAptitudeTest(aptitude)}
-                    className="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-colors"
-                  >
-                    Seleccionar Aptitud
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div>
-            <button 
-              onClick={() => setSelectedAptitude(null)}
-              className="mb-6 text-blue-600 hover:text-blue-800 flex items-center"
-            >
-              ← Volver a Aptitudes
-            </button>
-            
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">
-              {selectedAptitude} - Categorías
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {aptitudeTests
-                .find(test => test.aptitude === selectedAptitude)
-                ?.categories.map((category) => (
-                  <div 
-                    key={category.id}
-                    className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden"
-                  >
-                    <div className="p-6">
-                      <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                        {category.name}
-                      </h3>
-                      <p className="text-gray-500 text-sm mb-4">
-                        {category.description}
-                      </p>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${difficultyColors[category.difficulty]}`}>
-                        {category.difficulty}
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 text-[#91c26a] mb-2">
+                      <Icon className="h-5 w-5" />
+                      <span className="text-sm font-medium">{test.category}</span>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {test.title}
+                    </h3>
+                    <p className="text-gray-600 text-sm mb-4">{test.description}</p>
+                    <div className="flex items-center space-x-2 mb-4">
+                      <span className="px-2 py-1 bg-gray-100 rounded text-sm text-gray-600">
+                        {test.difficulty}
                       </span>
-                      <button 
-                        onClick={() => handleStartCategoryTest(category.name)}
-                        className="w-full mt-4 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-colors"
-                      >
-                        Iniciar Test
-                      </button>
                     </div>
                   </div>
-                ))
-              }
-            </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/take-test?testId=${test.id}`)}
+                  className="w-full px-4 py-2 bg-[#91c26a] text-white rounded hover:bg-[#6ea844] transition-colors"
+                >
+                  Comenzar Test
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {filteredTests.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-600">No hay tests disponibles en esta categoría.</p>
           </div>
         )}
       </div>

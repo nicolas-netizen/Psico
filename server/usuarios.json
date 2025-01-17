@@ -3,68 +3,32 @@
     "id": "admin-1",
     "email": "admin@chapiri.com",
     "name": "Admin",
-    "password": "$2a$10$MP7mQ6A3gmyG0MA59tmX8uGNtp7DRo997msDwmJ4.dx6c8zPDWGMu",
+    "password": "$2a$10$v1Uk4CxoUoGL9KTh3AOjDeLW0U0/CJ0uf4eTBa0ODBtLJCARYpWnG",
     "role": "admin",
-    "createdAt": "2025-01-13T17:28:28.900Z",
+    "createdAt": "2025-01-14T13:08:07.732Z",
     "subscription": {
       "planId": "plan-1",
       "planName": "Administrador",
-      "purchaseDate": "2025-01-13T17:28:28.903Z",
+      "purchaseDate": "2025-01-14T13:08:07.733Z",
       "features": [
         "Acceso total al sistema"
       ]
     }
   },
   {
-    "id": "f443aa9c-5741-4c2f-9716-6e5938465583",
+    "id": "799b9a4b-cfab-4420-8c71-5adb0f177408",
     "email": "admin@modernshop.com",
-    "name": "Soporte",
-    "password": "$2a$10$hPWwwHYarmG1Csk41NkxduZlCkk/x7pVMqSpJHHc5AHi80lAj1mGG",
-    "role": "user",
-    "createdAt": "2025-01-08T19:39:09.664Z",
-    "subscription": {
-      "planId": "plan-1736365177702",
-      "planName": "God",
-      "purchaseDate": "2025-01-08T20:23:04.138Z",
-      "features": [
-        "Poder+1000",
-        "Poder +2''0000"
-      ]
-    }
-  },
-  {
-    "id": "1d9f7f18-59af-4b16-a65d-0633ab10cbd2",
-    "email": "nico2005coki@gmail.com",
     "name": "GuKu 111",
-    "password": "$2a$10$UaE7avWaoogi2e.XqBrdCOLT2eFnowaWpgAezlViuBnPtNZzbBxAu",
+    "password": "$2a$10$kRobgSVWoDWKrGZltJMlLessVBeEYwF64MILJHm2RD2iPg0BQ6rFu",
     "role": "user",
-    "createdAt": "2025-01-08T20:36:08.914Z",
+    "createdAt": "2025-01-14T12:46:16.214Z",
     "subscription": {
       "planId": "plan-1736365177702",
       "planName": "God",
-      "purchaseDate": "2025-01-08T20:53:33.234Z",
+      "purchaseDate": "2025-01-14T13:02:23.540Z",
       "features": [
         "Poder+1000",
         "Poder +2''0000"
-      ]
-    }
-  },
-  {
-    "id": "eee45c3d-2c24-4f76-ab1b-0f9b87fc0647",
-    "email": "nicolaspaniagua766@gmail.com",
-    "name": "Pedos",
-    "password": "$2a$10$aC7DXHiUc13KgFbJZD5kveNqkMexKsyxZfoIt5gUdTnfxxY9AYBRa",
-    "role": "user",
-    "createdAt": "2025-01-09T00:44:30.922Z",
-    "subscription": {
-      "planId": "plan-1",
-      "planName": "Básico",
-      "purchaseDate": "2025-01-09T00:58:52.207Z",
-      "features": [
-        "Acceso a tests básicos",
-        "Límite de 5 tests por mes",
-        "Soporte por correo electrónico",
-        "a"
       ]
     }
   }

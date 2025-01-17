@@ -1,46 +1,50 @@
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
-const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-const multer = require('multer');
 const net = require('net');
 
+// Constants for file paths
+const USUARIOS_FILE = path.join(__dirname, 'data', 'usuarios.json');
+const PLANES_FILE = path.join(__dirname, 'data', 'planes.json');
+const TESTS_FILE = path.join(__dirname, 'data', 'tests.json');
+const TEST_RESULTS_FILE = path.join(__dirname, 'data', 'test_results.json');
+
+// Ensure data directory exists
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir);
+}
+
+// Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-// Comprehensive CORS configuration
-const corsOptions = {
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5176', 'http://localhost:5177'], // Añade aquí el puerto 5176
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-};
-
-// Apply CORS middleware
-app.use(cors(corsOptions));
-
-// Global error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled Error:', err);
-  res.status(500).json({ 
-    message: 'An unexpected error occurred', 
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error' 
-  });
-});
-
+// Middleware
+app.use(cors());
 app.use(express.json());
 
+// Logging middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// File paths
 const USUARIOS_FILE = path.join(__dirname, 'usuarios.json');
 const PLANES_FILE = path.join(__dirname, 'planes.json');
 const TESTS_FILE = path.join(__dirname, 'tests.json');
-const TEST_HISTORY_FILE = path.join(__dirname, 'test-history.json');
 const TEST_RESULTS_FILE = path.join(__dirname, 'test_results.json');
 
 // Utility functions
 function readJsonFile(filePath) {
   try {
+    if (!fs.existsSync(filePath)) {
+      return [];
+    }
     const data = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
@@ -51,79 +55,215 @@ function readJsonFile(filePath) {
 
 function writeJsonFile(filePath, data) {
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
   } catch (error) {
     console.error(`Error writing file ${filePath}:`, error);
+    throw error;
+  }
+}
+
+// Initialize JSON files
+function initializeJsonFiles() {
+  const defaultPlanes = [
+    {
+      id: 'plan-1',
+      name: 'Plan Básico',
+      price: 0,
+      features: ['Tests básicos', 'Acceso limitado'],
+      maxTests: 3
+    },
+    {
+      id: 'plan-2',
+      name: 'Plan Premium',
+      price: 29.99,
+      features: ['Tests ilimitados', 'Acceso completo', 'Reportes detallados'],
+      maxTests: -1
+    }
+  ];
+
+  const defaultTests = [
+    {
+      id: 'test-1',
+      title: 'Test de Aptitud Verbal',
+      description: 'Evalúa tu comprensión verbal y vocabulario',
+      category: 'verbal',
+      difficulty: 1,
+      questions: [
+        {
+          id: 'q1',
+          text: '¿Cuál es el sinónimo de "efímero"?',
+          options: ['Duradero', 'Pasajero', 'Eterno', 'Permanente'],
+          correctOption: 1
+        }
+      ],
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'test-2',
+      title: 'Test de Razonamiento Numérico',
+      description: 'Evalúa tu capacidad de resolver problemas matemáticos',
+      category: 'numerical',
+      difficulty: 2,
+      questions: [
+        {
+          id: 'q1',
+          text: 'Completa la serie: 2, 4, 8, 16, ...',
+          options: ['24', '32', '30', '28'],
+          correctOption: 1
+        }
+      ],
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'test-3',
+      title: 'Test de Razonamiento Lógico',
+      description: 'Evalúa tu capacidad de pensamiento lógico',
+      category: 'logical',
+      difficulty: 2,
+      questions: [
+        {
+          id: 'q1',
+          text: 'Si A implica B, y B implica C, entonces...',
+          options: [
+            'A implica C',
+            'C implica A',
+            'No hay relación entre A y C',
+            'A y C son iguales'
+          ],
+          correctOption: 0
+        }
+      ],
+      createdAt: new Date().toISOString()
+    }
+  ];
+
+  if (!fs.existsSync(PLANES_FILE)) {
+    writeJsonFile(PLANES_FILE, defaultPlanes);
+  }
+  
+  if (!fs.existsSync(TESTS_FILE)) {
+    writeJsonFile(TESTS_FILE, defaultTests);
+  }
+  
+  if (!fs.existsSync(TEST_RESULTS_FILE)) {
+    writeJsonFile(TEST_RESULTS_FILE, []);
+  }
+  
+  if (!fs.existsSync(USUARIOS_FILE)) {
+    writeJsonFile(USUARIOS_FILE, []);
   }
 }
 
 // Ensure admin user exists
-function ensureAdminUser() {
-  let users = readJsonFile(USUARIOS_FILE);
-  const adminIndex = users.findIndex(u => u.email === 'admin@chapiri.com');
+async function ensureAdminUser() {
+  try {
+    const users = readJsonFile(USUARIOS_FILE);
+    const adminExists = users.some(user => user.role === 'admin');
 
-  const adminUser = {
-    id: 'admin-1',
-    email: 'admin@chapiri.com',
-    name: 'Admin',
-    password: bcrypt.hashSync('admin123', 10),
-    role: 'admin',
-    createdAt: new Date().toISOString(),
-    subscription: {
-      planId: 'plan-1',
-      planName: 'Administrador',
-      purchaseDate: new Date().toISOString(),
-      features: ['Acceso total al sistema']
+    if (!adminExists) {
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const adminUser = {
+        id: uuidv4(),
+        email: 'admin@example.com',
+        password: hashedPassword,
+        role: 'admin',
+        name: 'Admin',
+        createdAt: new Date().toISOString()
+      };
+
+      users.push(adminUser);
+      writeJsonFile(USUARIOS_FILE, users);
+      console.log('Admin user ensured successfully');
     }
-  };
-
-  if (adminIndex === -1) {
-    // Add admin user if not exists
-    users.push(adminUser);
-  } else {
-    // Replace existing admin user to ensure correct credentials
-    users[adminIndex] = adminUser;
+  } catch (error) {
+    console.error('Error ensuring admin user:', error);
   }
-
-  writeJsonFile(USUARIOS_FILE, users);
-  console.log('Admin user ensured successfully');
 }
 
-// Call this function when the server starts
+// Initialize files and admin user
+initializeJsonFiles();
 ensureAdminUser();
 
-// Login Route with enhanced error handling
-app.post('/login', (req, res) => {
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ message: 'Invalid token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Login route
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log('Login attempt:', email);
-
     const users = readJsonFile(USUARIOS_FILE);
     const user = users.find(u => u.email === email);
 
     if (!user) {
-      console.log('User not found:', email);
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    const isPasswordValid = bcrypt.compareSync(password, user.password);
-    if (!isPasswordValid) {
-      console.log('Invalid password for:', email);
-      return res.status(401).json({ message: 'Contraseña incorrecta' });
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Remove sensitive data before sending
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role }, 
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
     const { password: _, ...userWithoutPassword } = user;
 
-    console.log('Login successful for:', email);
-    res.status(200).json({ 
-      message: 'Inicio de sesión exitoso', 
-      user: userWithoutPassword 
+    res.json({ 
+      user: userWithoutPassword,
+      token 
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Error en el inicio de sesión' });
+    res.status(500).json({ message: 'Server error during login' });
   }
+});
+
+// Protected routes
+app.use('/api/users/stats', authenticateToken, (req, res) => {
+  try {
+    const userStats = {
+      testsCompleted: 10,
+      averageScore: 85,
+      lastTestDate: new Date(),
+      // Add more stats as needed
+    };
+    res.json(userStats);
+  } catch (error) {
+    console.error('Error fetching user stats:', error);
+    res.status(500).json({ message: 'Error fetching user stats' });
+  }
+});
+
+app.use('/api/tests', authenticateToken);
+
+// Global error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled Error:', err);
+  if (err.name === 'UnauthorizedError' || err.name === 'TokenExpiredError') {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+  res.status(500).json({ 
+    message: 'An unexpected error occurred', 
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error' 
+  });
 });
 
 // Register Route
@@ -386,93 +526,6 @@ app.delete('/admin/planes/:id', (req, res) => {
     
     res.json({ 
       message: 'Plan eliminado exitosamente' 
-    });
-  } catch (error) {
-    console.error('Error deleting plan:', error);
-    res.status(500).json({ message: 'Error al eliminar el plan' });
-  }
-});
-
-// Plan Routes
-app.get('/planes', (req, res) => {
-  try {
-    const planes = readJsonFile(PLANES_FILE);
-    res.status(200).json(planes);
-  } catch (error) {
-    console.error('Error fetching plans:', error);
-    res.status(500).json({ message: 'Error al obtener los planes' });
-  }
-});
-
-app.put('/planes/:id', (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, price, features, featured, recommended, description } = req.body;
-    
-    console.log('Updating plan:', { id, body: req.body });
-    
-    let planes = readJsonFile(PLANES_FILE);
-    const planIndex = planes.findIndex(p => p.id === id);
-
-    if (planIndex === -1) {
-      console.error('Plan not found:', id);
-      return res.status(404).json({ message: 'Plan no encontrado' });
-    }
-
-    // Preserve existing values if not provided
-    const updatedPlan = {
-      ...planes[planIndex],
-      ...(name !== undefined && { name }),
-      ...(price !== undefined && { price: parseFloat(price) }),
-      ...(features !== undefined && { features }),
-      ...(featured !== undefined && { featured }),
-      ...(recommended !== undefined && { recommended }),
-      ...(description !== undefined && { description }),
-      updatedAt: new Date().toISOString()
-    };
-
-    // Remove any duplicate plans with the same ID
-    planes = planes.filter(p => p.id !== id);
-    
-    // Add the updated plan
-    planes.push(updatedPlan);
-
-    // Ensure no duplicates
-    planes = planes.filter((plan, index, self) => 
-      index === self.findIndex(p => p.id === plan.id)
-    );
-
-    console.log('Updated plan:', updatedPlan);
-
-    writeJsonFile(PLANES_FILE, planes);
-
-    res.status(200).json({ 
-      message: 'Plan actualizado exitosamente', 
-      plan: updatedPlan 
-    });
-  } catch (error) {
-    console.error('Error updating plan:', error);
-    res.status(500).json({ message: 'Error al actualizar el plan', error: error.toString() });
-  }
-});
-
-app.delete('/planes/:id', (req, res) => {
-  try {
-    const { id } = req.params;
-    let planes = readJsonFile(PLANES_FILE);
-    
-    const initialLength = planes.length;
-    planes = planes.filter(p => p.id !== id);
-
-    if (planes.length === initialLength) {
-      return res.status(404).json({ message: 'Plan no encontrado' });
-    }
-
-    writeJsonFile(PLANES_FILE, planes);
-
-    res.status(200).json({ 
-      message: 'Plan eliminado exitosamente', 
-      planId: id 
     });
   } catch (error) {
     console.error('Error deleting plan:', error);
@@ -1105,6 +1158,7 @@ app.post('/tests/generate', (req, res) => {
     }
 
     // Validate user existence 
+    const users = readJsonFile(USUARIOS_FILE);
     const user = users.find(u => u.id === userId);
     if (!user) {
       console.error(`User not found with ID: ${userId}`);
@@ -1258,9 +1312,423 @@ app.get('/tests/error-statistics', (req, res) => {
   }
 });
 
-const users = JSON.parse(fs.readFileSync(path.join(__dirname, 'usuarios.json'), 'utf8'));
+// Ruta para obtener tests disponibles para un usuario en un plan específico
+app.get('/tests/available', (req, res) => {
+  try {
+    const users = readJsonFile(USUARIOS_FILE);
+    const user = users.find(u => u.id === req.user.id);
+    const userPlan = readJsonFile(PLANES_FILE).find(p => p.id === user.planId);
+    const tests = readJsonFile(TESTS_FILE).filter(t => t.difficulty <= userPlan.maxDifficulty);
+    res.json(tests);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
-// Route to fetch available aptitude tests
+app.get('/tests/:id', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Usuario no autenticado' });
+    }
+
+    const { id } = req.params;
+    const tests = readJsonFile(TESTS_FILE);
+    const test = tests.find(t => t.id === id);
+
+    if (!test) {
+      return res.status(404).json({ message: 'Test not found' });
+    }
+
+    // Verificar si el usuario tiene acceso a este test
+    const users = readJsonFile(USUARIOS_FILE);
+    const user = users.find(u => u.id === req.user.id);
+    const userPlan = readJsonFile(PLANES_FILE).find(p => p.id === user.planId);
+    
+    if (test.difficulty > userPlan.maxDifficulty) {
+      return res.status(403).json({ message: 'No tienes acceso a este test' });
+    }
+
+    res.json(test);
+  } catch (error) {
+    console.error('Error getting test:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/tests/:id/submit', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userAnswers } = req.body;
+
+    const tests = readJsonFile(TESTS_FILE);
+    const test = tests.find(t => t.id === id);
+
+    if (!test) {
+      return res.status(404).json({ message: 'Test not found' });
+    }
+
+    const markedAnswers = userAnswers.map(answer => {
+      const testQuestion = test.questions.find(q => q.id === answer.questionId);
+      
+      return {
+        ...answer,
+        isCorrect: testQuestion 
+          ? testQuestion.correctOption === answer.selectedOption 
+          : false
+      };
+    });
+
+    let testResults = readJsonFile(TEST_RESULTS_FILE);
+
+    const newTestResult = {
+      id: `result-${Date.now()}`,
+      testId: id,
+      userId: req.body.userId || 'unknown', // You might want to get this from authentication
+      answers: markedAnswers,
+      timestamp: new Date().toISOString(),
+      score: calculateTestScore(markedAnswers)
+    };
+
+    testResults.push(newTestResult);
+
+    writeJsonFile(TEST_RESULTS_FILE, testResults);
+
+    res.json(newTestResult);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/tests/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+
+    let tests = readJsonFile(TESTS_FILE);
+
+    const updatedTests = tests.filter(t => t.id !== id);
+
+    if (updatedTests.length === tests.length) {
+      return res.status(404).json({ message: 'Test not found' });
+    }
+
+    writeJsonFile(TESTS_FILE, updatedTests);
+
+    res.json({ message: 'Test deleted' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// User stats and plan routes
+app.get('/users/stats', authenticateToken, (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Usuario no autenticado' });
+    }
+
+    const testResults = readJsonFile(TEST_RESULTS_FILE);
+    const userTestResults = testResults.filter(r => r.userId === req.user.id);
+
+    const stats = {
+      totalTests: userTestResults.length,
+      averageScore: userTestResults.length > 0
+        ? Math.round(userTestResults.reduce((acc, curr) => acc + curr.score, 0) / userTestResults.length)
+        : 0,
+      totalTime: userTestResults.length * 30, // Asumiendo 30 minutos por test
+      testHistory: userTestResults.map(result => ({
+        id: result.id,
+        testId: result.testId,
+        date: result.timestamp,
+        score: result.score
+      }))
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error getting user stats:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/users/plan', (req, res) => {
+  try {
+    const users = readJsonFile(USUARIOS_FILE);
+    const user = users.find(u => u.id === req.user.id);
+    
+    if (!user || !user.planId) {
+      return res.json({
+        name: 'Plan Básico',
+        expiryDate: null,
+        features: ['Tests básicos'],
+        testsRemaining: 3
+      });
+    }
+    
+    const plans = readJsonFile(PLANES_FILE);
+    const userPlan = plans.find(p => p.id === user.planId);
+    
+    if (!userPlan) {
+      return res.status(404).json({ message: 'Plan not found' });
+    }
+    
+    res.json({
+      name: userPlan.name,
+      expiryDate: user.planExpiryDate,
+      features: userPlan.features,
+      testsRemaining: userPlan.testsPerMonth - (user.testsThisMonth || 0)
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, '../dist')));
+
+// API routes
+app.use('/api', express.Router()
+  .post('/auth/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      const users = readJsonFile(USUARIOS_FILE);
+      const user = users.find(u => u.email === email);
+
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      // Create JWT token
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role }, 
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      // Remove password from user object before sending
+      const { password: _, ...userWithoutPassword } = user;
+
+      res.json({ 
+        user: userWithoutPassword,
+        token 
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ message: 'Server error during login' });
+    }
+  })
+);
+
+// Protected API routes
+app.use('/api/users/stats', authenticateToken);
+app.use('/api/tests', authenticateToken);
+
+// Handle React routing, return all requests to React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+
+// Test routes
+app.get('/api/tests', authenticateToken, (req, res) => {
+  try {
+    const tests = readJsonFile(TESTS_FILE);
+    res.json(tests);
+  } catch (error) {
+    console.error('Error fetching tests:', error);
+    res.status(500).json({ message: 'Error al obtener los tests' });
+  }
+});
+
+app.get('/api/tests/recent', authenticateToken, (req, res) => {
+  try {
+    const tests = readJsonFile(TESTS_FILE);
+    const recentTests = tests
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 6);
+    res.json(recentTests);
+  } catch (error) {
+    console.error('Error fetching recent tests:', error);
+    res.status(500).json({ message: 'Error al obtener tests recientes' });
+  }
+});
+
+app.get('/api/tests/:id', authenticateToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const tests = readJsonFile(TESTS_FILE);
+    const test = tests.find(t => t.id === id);
+    
+    if (!test) {
+      return res.status(404).json({ message: 'Test no encontrado' });
+    }
+    
+    res.json(test);
+  } catch (error) {
+    console.error('Error fetching test:', error);
+    res.status(500).json({ message: 'Error al obtener el test' });
+  }
+});
+
+app.post('/api/tests/:id/submit', authenticateToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { answers } = req.body;
+    const tests = readJsonFile(TESTS_FILE);
+    const test = tests.find(t => t.id === id);
+    
+    if (!test) {
+      return res.status(404).json({ message: 'Test no encontrado' });
+    }
+    
+    // Calculate score (implement your scoring logic here)
+    const score = Math.floor(Math.random() * 100); // Placeholder scoring
+    
+    // Save test result
+    const testResults = readJsonFile(TEST_RESULTS_FILE);
+    const newResult = {
+      id: uuidv4(),
+      userId: req.user.id,
+      testId: id,
+      answers,
+      score,
+      date: new Date().toISOString()
+    };
+    
+    testResults.push(newResult);
+    writeJsonFile(TEST_RESULTS_FILE, testResults);
+    
+    res.json(newResult);
+  } catch (error) {
+    console.error('Error submitting test:', error);
+    res.status(500).json({ message: 'Error al enviar el test' });
+  }
+});
+
+app.get('/api/users/stats', authenticateToken, (req, res) => {
+  try {
+    const testResults = readJsonFile(TEST_RESULTS_FILE);
+    const userResults = testResults.filter(result => result.userId === req.user.id);
+    
+    const stats = {
+      totalTests: userResults.length,
+      averageScore: userResults.length > 0
+        ? Math.round(userResults.reduce((acc, curr) => acc + curr.score, 0) / userResults.length)
+        : 0,
+      totalTime: userResults.length * 30, // Asumiendo 30 minutos por test
+      testHistory: userResults.map(result => ({
+        id: result.id,
+        testId: result.testId,
+        date: result.date,
+        score: result.score
+      }))
+    };
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Error getting user stats:', error);
+    res.status(500).json({ message: 'Error getting user stats' });
+  }
+});
+
+app.get('/api/users/plan', authenticateToken, (req, res) => {
+  try {
+    const users = readJsonFile(USUARIOS_FILE);
+    const user = users.find(u => u.id === req.user.id);
+    
+    if (!user || !user.planId) {
+      return res.json({
+        name: 'Free',
+        expiryDate: null,
+        features: ['Basic Tests', 'Limited Access'],
+        testsRemaining: 3
+      });
+    }
+    
+    const plans = readJsonFile(PLANES_FILE);
+    const userPlan = plans.find(p => p.id === user.planId);
+    
+    if (!userPlan) {
+      return res.status(404).json({ message: 'Plan not found' });
+    }
+    
+    res.json({
+      name: userPlan.name,
+      expiryDate: user.planExpiryDate,
+      features: userPlan.features,
+      testsRemaining: userPlan.testsPerMonth || -1 // -1 means unlimited
+    });
+  } catch (error) {
+    console.error('Error fetching user plan:', error);
+    res.status(500).json({ message: 'Error fetching user plan' });
+  }
+});
+
+app.post('/api/tests/:testId/submit', authenticateToken, (req, res) => {
+  try {
+    const { testId } = req.params;
+    const { answers } = req.body;
+    const tests = readJsonFile(TESTS_FILE);
+    const test = tests.find(t => t.id === testId);
+    
+    if (!test) {
+      return res.status(404).json({ message: 'Test not found' });
+    }
+    
+    // Calculate score
+    const score = calculateTestScore(answers);
+    
+    // Save test result
+    const testResults = readJsonFile(TEST_RESULTS_FILE);
+    const newResult = {
+      id: uuidv4(),
+      userId: req.user.id,
+      testId,
+      answers,
+      score,
+      date: new Date().toISOString()
+    };
+    
+    testResults.push(newResult);
+    writeJsonFile(TEST_RESULTS_FILE, testResults);
+    
+    res.json(newResult);
+  } catch (error) {
+    console.error('Error submitting test:', error);
+    res.status(500).json({ message: 'Error submitting test' });
+  }
+});
+
+app.get('/api/users/stats', authenticateToken, (req, res) => {
+  try {
+    const testResults = readJsonFile(TEST_RESULTS_FILE);
+    const userResults = testResults.filter(result => result.userId === req.user.id);
+    
+    const stats = {
+      totalTests: userResults.length,
+      averageScore: userResults.length > 0
+        ? Math.round(userResults.reduce((acc, curr) => acc + curr.score, 0) / userResults.length)
+        : 0,
+      totalTime: userResults.length * 30, // Asumiendo 30 minutos por test
+      testHistory: userResults.map(result => ({
+        id: result.id,
+        testId: result.testId,
+        date: result.date,
+        score: result.score
+      }))
+    };
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Error getting user stats:', error);
+    res.status(500).json({ message: 'Error getting user stats' });
+  }
+});
+
+// Aptitude tests routes
 app.get('/tests/aptitudes', (req, res) => {
   try {
     const { aptitude } = req.query;
@@ -1400,53 +1868,12 @@ app.post('/tests/:testId/submit', (req, res) => {
 
 // Helper function to calculate test score
 function calculateTestScore(userAnswers) {
-  // Assuming userAnswers is an array of answer objects
-  const totalQuestions = userAnswers.length;
-  const correctAnswers = userAnswers.filter(answer => answer.isCorrect).length;
-  const percentageScore = totalQuestions > 0 
-    ? Math.round((correctAnswers / totalQuestions) * 100) 
-    : 0;
-
-  return {
-    score: correctAnswers,
-    totalQuestions,
-    correctAnswers,
-    percentageScore,
-    categoryPerformance: calculateCategoryPerformance(userAnswers),
-    strengths: [],  // You might want to implement actual strength detection
-    weaknesses: []  // You might want to implement actual weakness detection
-  };
-}
-
-// Helper function to calculate category performance
-function calculateCategoryPerformance(userAnswers) {
-  const categoryPerformance = {};
-
-  // Group answers by category
+  let correctAnswers = 0;
   userAnswers.forEach(answer => {
-    const category = answer.category || 'uncategorized';
-    
-    if (!categoryPerformance[category]) {
-      categoryPerformance[category] = {
-        totalQuestions: 0,
-        correctAnswers: 0,
-        percentageScore: 0
-      };
-    }
-
-    categoryPerformance[category].totalQuestions++;
-    if (answer.isCorrect) {
-      categoryPerformance[category].correctAnswers++;
+    const question = answer.question;
+    if (question && question.correctOption === answer.selectedOption) {
+      correctAnswers++;
     }
   });
-
-  // Calculate percentage for each category
-  Object.keys(categoryPerformance).forEach(category => {
-    const { totalQuestions, correctAnswers } = categoryPerformance[category];
-    categoryPerformance[category].percentageScore = totalQuestions > 0 
-      ? Math.round((correctAnswers / totalQuestions) * 100) 
-      : 0;
-  });
-
-  return categoryPerformance;
+  return Math.round((correctAnswers / userAnswers.length) * 100);
 }

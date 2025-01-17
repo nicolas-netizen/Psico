@@ -127,15 +127,25 @@ export interface Test {
   id: string;
   title: string;
   description: string;
-  fileUrl: string;
-  plans: string[]; 
-  category?: string;
-  difficulty?: QuestionDifficulty;
-  createdAt: string;
-  updatedAt: string;
-  questions: TestQuestion[];
-  timeLimit?: number; 
-  configuration?: any;
+  timeLimit?: number;
+  plans: string[];
+  questions: Question[];
+  aptitudes: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Question {
+  id: string;
+  text: string;
+  options: Option[];
+  correctAnswer: string;
+  aptitude: string;
+}
+
+export interface Option {
+  id: string;
+  text: string;
 }
 
 export interface AptitudeTest {

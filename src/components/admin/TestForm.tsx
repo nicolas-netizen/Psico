@@ -10,7 +10,7 @@ import {
 } from '../../types/Test';
 import { Plan, getPlans } from '../../services/firestore';
 import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { db } from '../../firebase/firebaseConfig';
 
 const APTITUDE_CATEGORIES = {
   VERBAL: [

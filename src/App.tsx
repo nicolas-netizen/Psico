@@ -1,95 +1,79 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-
-// Components
+import Navbar from './components/Navbar';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/user/Dashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
-import ManagePlans from './components/admin/ManagePlans';
-import ProtectedRoute from './components/auth/ProtectedRoute';
 import AdminRoute from './components/auth/AdminRoute';
-import Home from './pages/Home';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
-import Precios from './pages/Precios';
-import { useAuth } from './context/AuthContext';
-import TestForm from './components/admin/TestForm';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import TestTakingPage from './components/test/TestTakingPage';
+import TestResultsPage from './components/test/TestResultsPage';
 import PlanList from './components/plans/PlanList';
+import Home from './pages/Home';
 
-// Componente para redireccionar basado en el rol
-const RoleBasedRedirect = () => {
-  const { isAdmin } = useAuth();
-  return <Navigate to={isAdmin ? '/admin' : '/dashboard'} replace />;
+// Componente protegido que requiere autenticación
+const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
+  const { currentUser } = useAuth();
+  
+  if (!currentUser) {
+    return <Navigate to="/login" />;
+  }
+  
+  return <>{children}</>;
 };
 
 const AppContent = () => {
-  const location = useLocation();
-  const showFooter = location.pathname === '/';
+  const { currentUser, isAdmin } = useAuth();
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="App">
+      <ToastContainer position="top-right" autoClose={3000} />
       <Navbar />
-      <main className="flex-grow">
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-
-          {/* Protected user routes */}
-          <Route element={<ProtectedRoute />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/precios" element={<PlanList />} />
-          </Route>
-
-          {/* Protected admin routes */}
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <AdminDashboard />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/planes"
-            element={
-              <AdminRoute>
-                <ManagePlans />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/tests/create"
-            element={
-              <AdminRoute>
-                <TestForm onTestCreated={() => {}} onClose={() => {}} />
-              </AdminRoute>
-            }
-          />
-
-          {/* Default redirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-      {showFooter && <Footer />}
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={currentUser ? <Navigate to="/dashboard" /> : <Login />} />
+        <Route path="/register" element={currentUser ? <Navigate to="/dashboard" /> : <Register />} />
+        <Route path="/dashboard" element={
+          <PrivateRoute>
+            <Dashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/admin" element={
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
+        } />
+        <Route path="/test/:testId" element={
+          <PrivateRoute>
+            <TestTakingPage />
+          </PrivateRoute>
+        } />
+        <Route path="/test-results/:resultId" element={
+          <PrivateRoute>
+            <TestResultsPage />
+          </PrivateRoute>
+        } />
+        <Route path="/plans" element={
+          <PrivateRoute>
+            <PlanList />
+          </PrivateRoute>
+        } />
+      </Routes>
     </div>
   );
 };
 
-const App: React.FC = () => {
+function App() {
   return (
     <Router>
       <AuthProvider>
         <AppContent />
-        <ToastContainer position="bottom-right" />
       </AuthProvider>
     </Router>
   );
-};
+}
 
 export default App;

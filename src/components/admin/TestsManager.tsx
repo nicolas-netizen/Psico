@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-hot-toast';
-import api from '../../services/api';
+import { toast } from 'react-toastify';
+import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase/firebaseConfig';
 import { Test } from '../../types/Test';
 import TestForm from './TestForm';
 
@@ -12,8 +13,14 @@ const TestsManager: React.FC = () => {
 
   const fetchTests = async () => {
     try {
-      const fetchedTests = await api.getTests();
-      setTests(fetchedTests.sort((a: Test, b: Test) => 
+      const testsCollection = collection(db, 'tests');
+      const testsSnapshot = await getDocs(testsCollection);
+      const testsList = testsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Test[];
+      
+      setTests(testsList.sort((a: Test, b: Test) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       ));
     } catch (error) {
@@ -42,8 +49,8 @@ const TestsManager: React.FC = () => {
     if (!window.confirm('¿Está seguro de eliminar este test?')) return;
 
     try {
-      // TODO: Implement delete test API method
-      await api.deleteTest(testId);
+      const testRef = doc(db, 'tests', testId);
+      await deleteDoc(testRef);
       toast.success('Test eliminado exitosamente');
       fetchTests();
     } catch (error) {
@@ -81,7 +88,7 @@ const TestsManager: React.FC = () => {
               <h3 className="text-lg font-semibold">{test.title}</h3>
               <p className="text-gray-600">{test.description}</p>
               <div className="text-sm text-gray-500 mt-2">
-                Planes asociados: {test.plans.join(', ')}
+                Planes asociados: {test.plans?.join(', ') || 'Ninguno'}
               </div>
             </div>
             <div className="flex space-x-2">
@@ -102,28 +109,14 @@ const TestsManager: React.FC = () => {
         ))}
       </div>
 
-      {/* Modal for Test Form */}
+      {/* Test Form Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">
-                {isCreatingTest ? 'Crear Nuevo Test' : 'Editar Test'}
-              </h2>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                ✕
-              </button>
-            </div>
-            <TestForm 
-              initialTest={selectedTest}
-              onTestCreated={handleTestCreated}
-              onClose={() => setIsModalOpen(false)}
-            />
-          </div>
-        </div>
+        <TestForm
+          test={selectedTest}
+          onClose={() => setIsModalOpen(false)}
+          onSave={handleTestCreated}
+          isCreating={isCreatingTest}
+        />
       )}
     </div>
   );

@@ -1,363 +1,236 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Star, Check, X } from 'lucide-react';
-import type { Plan } from '../../types/Plan';
-import api from '../../services/api';
-import toast from 'react-hot-toast'; // Import toast
+import { toast } from 'react-hot-toast';
+import { Plan, createPlan, getPlans, updatePlan, deletePlan } from '../../services/firestore';
 
-const PlansManager = () => {
+interface PlanFormData {
+  name: string;
+  description: string;
+  price: number;
+  features: string[];
+  isFeatured: boolean;
+}
+
+const PlansManager: React.FC = () => {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState<PlanFormData>({
+    name: '',
+    description: '',
+    price: 0,
+    features: [''],
+    isFeatured: false,
+  });
 
   useEffect(() => {
-    const fetchPlans = async () => {
-      try {
-        setLoading(true);
-        const fetchedPlans = await api.getPlans();
-        
-        // Sort plans to ensure consistent order
-        const sortedPlans = fetchedPlans.sort((a, b) => 
-          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-        );
-        
-        setPlans(sortedPlans);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching plans:', err);
-        toast.error('No se pudieron cargar los planes');
-        setLoading(false);
-      }
-    };
-    fetchPlans();
+    loadPlans();
   }, []);
 
-  const handleAddPlan = () => {
-    const newPlan: Plan = {
-      id: `plan-${Date.now()}`,
-      name: '',
-      price: '',
-      features: [''],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setEditingPlan(newPlan);
-    setIsModalOpen(true);
+  const loadPlans = async () => {
+    try {
+      const fetchedPlans = await getPlans();
+      setPlans(fetchedPlans);
+    } catch (error) {
+      toast.error('Error al cargar los planes');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditPlan = (plan: Plan) => {
-    setEditingPlan({ ...plan });
-    setIsModalOpen(true);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editingPlan) {
+        await updatePlan(editingPlan.id!, {
+          ...formData,
+          updatedAt: new Date(),
+        });
+        toast.success('Plan actualizado exitosamente');
+      } else {
+        await createPlan(formData);
+        toast.success('Plan creado exitosamente');
+      }
+      resetForm();
+      loadPlans();
+    } catch (error) {
+      toast.error('Error al guardar el plan');
+    }
   };
 
-  const handleDeletePlan = async (planId: string) => {
+  const handleDelete = async (planId: string) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este plan?')) {
       try {
-        await api.deletePlan(planId);
-        const newPlans = plans.filter(p => p.id !== planId);
-        setPlans(newPlans);
-      } catch (err) {
-        console.error('Error deleting plan:', err);
-        setError('No se pudo eliminar el plan');
+        await deletePlan(planId);
+        toast.success('Plan eliminado exitosamente');
+        loadPlans();
+      } catch (error) {
+        toast.error('Error al eliminar el plan');
       }
     }
   };
 
-  const handleSavePlan = async (plan: Plan) => {
-    try {
-      const updatedPlan = {
-        ...plan,
-        price: parseFloat(plan.price.toString()),
-        features: plan.features.filter(f => f.trim() !== ''),
-        updatedAt: new Date().toISOString(),
-      };
-
-      let savedPlan;
-      if (plan.id.startsWith('plan-')) {
-        // New plan
-        savedPlan = await api.createPlan(updatedPlan);
-        
-        // Fetch all plans to ensure we have the full list
-        const allPlans = await api.getPlans();
-        setPlans(allPlans);
-      } else {
-        // Existing plan
-        savedPlan = await api.updatePlan(plan.id.toString(), updatedPlan);
-        
-        // Fetch all plans to ensure we have the full list
-        const allPlans = await api.getPlans();
-        setPlans(allPlans);
-      }
-
-      setIsModalOpen(false);
-      setEditingPlan(null);
-      toast.success('Plan guardado exitosamente');
-    } catch (err) {
-      console.error('Error saving plan:', err);
-      toast.error('No se pudo guardar el plan');
-      setError('No se pudo guardar el plan');
-    }
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      description: '',
+      price: 0,
+      features: [''],
+      isFeatured: false,
+    });
+    setEditingPlan(null);
   };
 
-  const handleToggleFeature = async (planId: string, feature: 'featured' | 'recommended') => {
-    try {
-      const planToUpdate = plans.find(p => p.id === planId);
-      if (!planToUpdate) {
-        toast.error('Plan no encontrado');
-        return;
-      }
-
-      const updatedPlan = {
-        ...planToUpdate,
-        [feature]: !planToUpdate[feature],
-        updatedAt: new Date().toISOString()
-      };
-
-      const response = await api.updatePlan(planId, updatedPlan);
-      
-      const newPlans = plans.map(p => 
-        p.id === planId ? response.plan : p
-      );
-      
-      setPlans(newPlans);
-      toast.success(`Plan ${feature === 'featured' ? 'destacado' : 'recomendado'} actualizado`);
-    } catch (err) {
-      console.error('Error toggling feature:', err);
-      toast.error(`No se pudo actualizar el plan: ${err.message}`);
-    }
-  };
+  if (loading) {
+    return <div>Cargando...</div>;
+  }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      {/* Error Notification */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md mb-4">
-          {error}
+    <div className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold">
+          {editingPlan ? 'Editar Plan' : 'Crear Nuevo Plan'}
+        </h2>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Nombre</label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            required
+          />
         </div>
-      )}
 
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Gestión de Planes</h2>
-        <button
-          onClick={handleAddPlan}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#91c26a] hover:bg-[#82b35b]"
-        >
-          <Plus className="h-5 w-5 mr-2" />
-          Nuevo Plan
-        </button>
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Descripción</label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            required
+          />
+        </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Precio
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Características
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Estado
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Acciones
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {plans.map((plan) => (
-              <tr key={plan.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {plan.name}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {plan.price}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  <ul className="list-disc list-inside">
-                    {plan.features?.map((feature, index) => (
-                      <li key={index}>{feature}</li>
-                    ))}
-                  </ul>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleToggleFeature(plan.id, 'featured')}
-                      className={`p-1 rounded ${
-                        plan.featured
-                          ? 'text-yellow-500 bg-yellow-50'
-                          : 'text-gray-400 hover:text-yellow-500'
-                      }`}
-                      title="Destacado"
-                    >
-                      <Star className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => handleToggleFeature(plan.id, 'recommended')}
-                      className={`p-1 rounded ${
-                        plan.recommended
-                          ? 'text-green-500 bg-green-50'
-                          : 'text-gray-400 hover:text-green-500'
-                      }`}
-                      title="Recomendado"
-                    >
-                      <Check className="h-5 w-5" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleEditPlan(plan)}
-                      className="text-blue-600 hover:text-blue-900"
-                    >
-                      <Edit2 className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeletePlan(plan.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Precio</label>
+          <input
+            type="number"
+            value={formData.price}
+            onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            required
+          />
+        </div>
 
-      {/* Modal de Edición */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                {editingPlan?.id.startsWith('plan-') ? 'Nuevo Plan' : 'Editar Plan'}
-              </h3>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Características</label>
+          {formData.features.map((feature, index) => (
+            <div key={index} className="flex mt-1">
+              <input
+                type="text"
+                value={feature}
+                onChange={(e) => {
+                  const newFeatures = [...formData.features];
+                  newFeatures[index] = e.target.value;
+                  setFormData({ ...formData, features: newFeatures });
+                }}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                required
+              />
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-500"
+                type="button"
+                onClick={() => {
+                  const newFeatures = formData.features.filter((_, i) => i !== index);
+                  setFormData({ ...formData, features: newFeatures });
+                }}
+                className="ml-2 px-2 py-1 text-red-600 hover:text-red-800"
               >
-                <X className="h-6 w-6" />
+                Eliminar
               </button>
             </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (editingPlan) {
-                  handleSavePlan(editingPlan);
-                }
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Nombre
-                </label>
-                <input
-                  type="text"
-                  value={editingPlan?.name || ''}
-                  onChange={(e) => 
-                    setEditingPlan(prev => prev ? { ...prev, name: e.target.value } : null)
-                  }
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#91c26a] focus:border-[#91c26a]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Precio
-                </label>
-                <input
-                  type="number"
-                  value={editingPlan?.price || ''}
-                  onChange={(e) => 
-                    setEditingPlan(prev => prev ? { ...prev, price: e.target.value } : null)
-                  }
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#91c26a] focus:border-[#91c26a]"
-                  required
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Características
-                </label>
-                {editingPlan?.features?.map((feature, index) => (
-                  <div key={index} className="flex items-center mt-1">
-                    <input
-                      type="text"
-                      value={feature}
-                      onChange={(e) => 
-                        setEditingPlan(prev => {
-                          if (!prev) return null;
-                          const newFeatures = [...prev.features];
-                          newFeatures[index] = e.target.value;
-                          return { ...prev, features: newFeatures };
-                        })
-                      }
-                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-[#91c26a] focus:border-[#91c26a]"
-                      placeholder="Característica"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => 
-                        setEditingPlan(prev => {
-                          if (!prev) return null;
-                          const newFeatures = prev.features.filter((_, i) => i !== index);
-                          return { ...prev, features: newFeatures };
-                        })
-                      }
-                      className="ml-2 text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => 
-                    setEditingPlan(prev => prev 
-                      ? { ...prev, features: [...prev.features, ''] } 
-                      : null
-                    )
-                  }
-                  className="mt-2 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-[#91c26a] bg-[#91c26a]/10 hover:bg-[#91c26a]/20 focus:outline-none"
-                >
-                  <Plus className="h-4 w-4 mr-1" /> Añadir Característica
-                </button>
-              </div>
-
-              <div className="pt-4 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#91c26a] hover:bg-[#82b35b]"
-                >
-                  Guardar Plan
-                </button>
-              </div>
-            </form>
-          </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setFormData({ ...formData, features: [...formData.features, ''] })}
+            className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+          >
+            + Agregar característica
+          </button>
         </div>
-      )}
+
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            checked={formData.isFeatured}
+            onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
+            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+          />
+          <label className="ml-2 block text-sm text-gray-900">Plan destacado</label>
+        </div>
+
+        <div className="flex justify-end space-x-3">
+          {editingPlan && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+          )}
+          <button
+            type="submit"
+            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+          >
+            {editingPlan ? 'Actualizar' : 'Crear'}
+          </button>
+        </div>
+      </form>
+
+      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        <ul className="divide-y divide-gray-200">
+          {plans.map((plan) => (
+            <li key={plan.id} className="px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">{plan.name}</h3>
+                  <p className="text-sm text-gray-500">{plan.description}</p>
+                  <p className="text-sm font-medium text-gray-900">Precio: ${plan.price}</p>
+                  <ul className="mt-2 text-sm text-gray-500">
+                    {plan.features.map((feature, index) => (
+                      <li key={index}>• {feature}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => {
+                      setEditingPlan(plan);
+                      setFormData({
+                        name: plan.name,
+                        description: plan.description,
+                        price: plan.price,
+                        features: plan.features,
+                        isFeatured: plan.isFeatured || false,
+                      });
+                    }}
+                    className="text-indigo-600 hover:text-indigo-900"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(plan.id!)}
+                    className="text-red-600 hover:text-red-900"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 };

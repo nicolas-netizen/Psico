@@ -1,5 +1,5 @@
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db } from '../firebase/firebaseConfig';
 
 // Datos iniciales para los planes
 const planes = [

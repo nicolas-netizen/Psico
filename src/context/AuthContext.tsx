@@ -1,27 +1,28 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
-  User,
-  UserCredential,
-  signInWithEmailAndPassword,
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
+  signOut as firebaseSignOut,
+  User as FirebaseUser
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../firebase/firebaseConfig';
+import { Test } from '../types/Test';
 
 interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<UserCredential>;
-  register: (email: string, password: string, displayName: string) => Promise<UserCredential>;
+  currentUser: FirebaseUser | null;
+  isAdmin: boolean;
+  login: (email: string, password: string) => Promise<{ isAdmin: boolean }>;
+  register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  getTestById: (testId: string) => Promise<Test>;
+  submitTestAnswers: (testId: string, answers: any[]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
+const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
@@ -29,15 +30,25 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          const isUserAdmin = userDoc.exists() && userDoc.data()?.role === 'admin';
+          setIsAdmin(isUserAdmin);
+        } catch (error) {
+          console.error('Error checking admin status:', error);
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
     });
 
     return unsubscribe;
@@ -46,77 +57,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      toast.success('¡Inicio de sesión exitoso!');
-      return userCredential;
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      const isUserAdmin = userDoc.exists() && userDoc.data()?.role === 'admin';
+      setIsAdmin(isUserAdmin);
+      return { isAdmin: isUserAdmin };
     } catch (error) {
       console.error('Login error:', error);
-      const authError = error as any;
-      
-      let errorMessage = 'Error al iniciar sesión';
-      switch (authError.code) {
-        case 'auth/invalid-credential':
-          errorMessage = 'Credenciales inválidas. Por favor verifica tu email y contraseña.';
-          break;
-        case 'auth/user-not-found':
-          errorMessage = 'Usuario no encontrado';
-          break;
-        case 'auth/wrong-password':
-          errorMessage = 'Contraseña incorrecta';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Email inválido';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Demasiados intentos fallidos. Por favor, intente más tarde';
-          break;
-        default:
-          errorMessage = authError.message || 'Error al iniciar sesión';
-      }
-      
-      toast.error(errorMessage);
       throw error;
     }
   };
 
-  const register = async (email: string, password: string, displayName: string) => {
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(userCredential.user, { displayName });
-      navigate('/login');
-      return userCredential;
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
-    }
+  const register = async (email: string, password: string) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    // Crear documento de usuario con rol por defecto
+    await setDoc(doc(db, 'users', userCredential.user.uid), {
+      email,
+      role: 'user',
+      createdAt: serverTimestamp()
+    });
   };
 
   const logout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout error:', error);
-      throw error;
+    await firebaseSignOut(auth);
+    setIsAdmin(false);
+  };
+
+  const getTestById = async (testId: string): Promise<Test> => {
+    const testDoc = await getDoc(doc(db, 'tests', testId));
+    if (!testDoc.exists()) {
+      throw new Error('Test not found');
     }
+    return { id: testDoc.id, ...testDoc.data() } as Test;
+  };
+
+  const submitTestAnswers = async (testId: string, answers: any[]) => {
+    if (!currentUser) throw new Error('User not authenticated');
+    
+    const testResultRef = collection(db, 'testResults');
+    // Implementar la lógica de envío de respuestas
   };
 
   const value = {
-    user,
-    loading,
+    currentUser,
+    isAdmin,
     login,
     register,
-    logout
+    logout,
+    getTestById,
+    submitTestAnswers
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading ? children : (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      )}
+      {children}
     </AuthContext.Provider>
   );
 };
 
-export { AuthContext };
+export { AuthContext, AuthProvider, useAuth };

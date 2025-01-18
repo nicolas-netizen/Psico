@@ -1,37 +1,30 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, X, User } from 'lucide-react';
-import { useGlobalAuth } from '../hooks/useGlobalAuth';
+import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { isAuthenticated, userRole, userEmail, logout } = useGlobalAuth();
+  const { currentUser: user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLoginClick = () => {
-    navigate('/login');
-    setIsOpen(false);
-  };
-
-  const handleRegisterClick = () => {
-    navigate('/register');
-    setIsOpen(false);
-  };
-
-  const handleDashboardClick = () => {
-    navigate('/dashboard');
-    setIsOpen(false);
-  };
-
-  const handleLogout = () => {
-    logout();
-    setIsOpen(false);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success('Sesión cerrada exitosamente');
+      navigate('/');
+      setIsOpen(false);
+    } catch (error) {
+      toast.error('Error al cerrar sesión');
+    }
   };
 
   return (
     <nav className="fixed top-0 left-0 right-0 bg-white shadow-md z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
             <Link to="/" className="text-2xl font-bold text-[#91c26a]">
               AcademiaChapiri
@@ -59,40 +52,62 @@ const Navbar = () => {
               >
                 Recursos
               </Link>
+              {user && (
+                <>
+                  {isAdmin ? (
+                    <Link
+                      to="/admin"
+                      className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      Panel Admin
+                    </Link>
+                  ) : (
+                    <Link
+                      to="/dashboard"
+                      className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                    >
+                      Mi Panel
+                    </Link>
+                  )}
+                  <Link
+                    to="/plans"
+                    className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Planes
+                  </Link>
+                </>
+              )}
             </div>
             
-            {isAuthenticated ? (
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={handleDashboardClick}
-                  className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  {userRole === 'admin' ? 'Panel Admin' : 'Mi Panel'}
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-500 text-white hover:bg-red-600 px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Cerrar Sesión
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={handleLoginClick}
-                  className="text-gray-600 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Iniciar Sesión
-                </button>
-                <button
-                  onClick={handleRegisterClick}
-                  className="bg-[#91c26a] text-white hover:bg-[#82b35b] px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Registrarse
-                </button>
-              </div>
-            )}
+            {/* User Menu */}
+            <div className="flex items-center space-x-4">
+              {user ? (
+                <div className="flex items-center space-x-4">
+                  <span className="text-gray-700 text-sm">{user.email}</span>
+                  <button
+                    onClick={handleLogout}
+                    className="bg-[#91c26a] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#7ea756] transition-colors"
+                  >
+                    Cerrar Sesión
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Iniciar Sesión
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="bg-[#91c26a] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#7ea756] transition-colors"
+                  >
+                    Registrarse
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Mobile menu button */}
@@ -133,41 +148,65 @@ const Navbar = () => {
             >
               Recursos
             </Link>
-            
-            {isAuthenticated ? (
+            {user && (
               <>
-                <div className="px-3 py-2 text-sm text-gray-500">
-                  {userEmail}
+                {isAdmin ? (
+                  <Link
+                    to="/admin"
+                    onClick={() => setIsOpen(false)}
+                    className="text-gray-700 hover:text-[#91c26a] block px-3 py-2 rounded-md text-base font-medium transition-colors"
+                  >
+                    Panel Admin
+                  </Link>
+                ) : (
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setIsOpen(false)}
+                    className="text-gray-700 hover:text-[#91c26a] block px-3 py-2 rounded-md text-base font-medium transition-colors"
+                  >
+                    Mi Panel
+                  </Link>
+                )}
+                <Link
+                  to="/plans"
+                  onClick={() => setIsOpen(false)}
+                  className="text-gray-700 hover:text-[#91c26a] block px-3 py-2 rounded-md text-base font-medium transition-colors"
+                >
+                  Planes
+                </Link>
+              </>
+            )}
+            {user ? (
+              <>
+                <div className="px-3 py-2">
+                  <span className="text-gray-700 text-sm block mb-2">{user.email}</span>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full bg-[#91c26a] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#7ea756] transition-colors"
+                  >
+                    Cerrar Sesión
+                  </button>
                 </div>
-                <button
-                  onClick={handleDashboardClick}
-                  className="text-gray-700 hover:text-[#91c26a] w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors flex items-center"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  {userRole === 'admin' ? 'Panel Admin' : 'Mi Panel'}
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-500 text-white hover:bg-red-600 w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors mt-2"
-                >
-                  Cerrar Sesión
-                </button>
-              </> 
+              </>
             ) : (
               <>
-                <button
-                  onClick={handleLoginClick}
-                  className="text-gray-700 hover:text-[#91c26a] w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors"
+                <Link
+                  to="/login"
+                  onClick={() => setIsOpen(false)}
+                  className="text-gray-700 hover:text-[#91c26a] block px-3 py-2 rounded-md text-base font-medium transition-colors"
                 >
                   Iniciar Sesión
-                </button>
-                <button
-                  onClick={handleRegisterClick}
-                  className="bg-[#91c26a] text-white hover:bg-[#82b35b] w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors mt-2"
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setIsOpen(false)}
+                  className="block px-3 py-2"
                 >
-                  Registrarse
-                </button>
-              </> 
+                  <span className="bg-[#91c26a] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#7ea756] transition-colors block text-center">
+                    Registrarse
+                  </span>
+                </Link>
+              </>
             )}
           </div>
         </div>

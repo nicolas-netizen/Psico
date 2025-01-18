@@ -13,7 +13,7 @@ import {
   Timestamp,
   setDoc
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db } from '../firebase/firebaseConfig';
 
 export interface Plan {
   id?: string;
@@ -168,6 +168,91 @@ export const getFeaturedPlan = async (): Promise<Plan | null> => {
   }
 };
 
+export const getFreePlan = async () => {
+  try {
+    const plansRef = collection(db, 'plans');
+    const q = query(plansRef, where('name', '==', 'Plan Gratuito'));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const planDoc = querySnapshot.docs[0];
+      return {
+        id: planDoc.id,
+        ...planDoc.data()
+      } as Plan;
+    }
+    
+    // Si no existe el plan gratuito, lo creamos
+    const freePlan = {
+      name: 'Plan Gratuito',
+      description: 'Plan básico con acceso a tests esenciales',
+      price: 0,
+      features: ['Acceso a tests básicos', 'Resultados inmediatos'],
+      isFeatured: false,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    };
+    
+    const newPlanRef = await addDoc(collection(db, 'plans'), freePlan);
+    return {
+      id: newPlanRef.id,
+      ...freePlan
+    } as Plan;
+  } catch (error) {
+    console.error('Error getting/creating free plan:', error);
+    throw error;
+  }
+};
+
+export const assignFreePlanToUser = async (userId: string) => {
+  try {
+    const freePlan = await getFreePlan();
+    const userPlanRef = doc(db, 'userPlans', userId);
+    
+    await setDoc(userPlanRef, {
+      userId,
+      planId: freePlan.id,
+      startDate: Timestamp.now(),
+      status: 'active'
+    });
+    
+    return freePlan;
+  } catch (error) {
+    console.error('Error assigning free plan:', error);
+    throw error;
+  }
+};
+
+export const getUserPlan = async (userId: string) => {
+  try {
+    // Primero intentamos obtener el plan actual del usuario
+    const userPlanRef = doc(db, 'userPlans', userId);
+    const userPlanDoc = await getDoc(userPlanRef);
+    
+    if (!userPlanDoc.exists()) {
+      // Si no tiene plan, le asignamos el gratuito
+      return await assignFreePlanToUser(userId);
+    }
+    
+    const userPlanData = userPlanDoc.data();
+    const planRef = doc(db, 'plans', userPlanData.planId);
+    const planDoc = await getDoc(planRef);
+    
+    if (!planDoc.exists()) {
+      // Si el plan referenciado no existe, asignamos uno gratuito
+      return await assignFreePlanToUser(userId);
+    }
+    
+    return {
+      id: planDoc.id,
+      ...planDoc.data()
+    } as Plan;
+  } catch (error) {
+    console.error('Error getting user plan:', error);
+    throw error;
+  }
+};
+
 // Tests
 export const getTests = async (): Promise<Test[]> => {
   try {
@@ -200,6 +285,46 @@ export const getTestById = async (testId: string): Promise<Test> => {
   } catch (error) {
     console.error('Error fetching test:', error);
     throw new Error('Error al obtener el test');
+  }
+};
+
+export const createInitialTest = async () => {
+  try {
+    console.log('Starting createInitialTest');
+    const testsRef = collection(db, 'tests');
+    const testQuery = query(testsRef, where('title', '==', 'Test de Ejemplo'));
+    const testSnapshot = await getDocs(testQuery);
+
+    if (testSnapshot.empty) {
+      console.log('No test found, creating initial test');
+      const testData = {
+        title: 'Test de Ejemplo',
+        description: 'Este es un test de ejemplo para demostrar la funcionalidad de la plataforma.',
+        questions: [
+          {
+            question: '¿Cómo te sientes hoy?',
+            options: ['Muy bien', 'Bien', 'Regular', 'Mal'],
+            correctAnswer: 0
+          },
+          {
+            question: '¿Has dormido bien últimamente?',
+            options: ['Sí, muy bien', 'Regular', 'No muy bien', 'Tengo problemas para dormir'],
+            correctAnswer: 0
+          }
+        ],
+        status: 'active' as const,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+
+      const docRef = await addDoc(testsRef, testData);
+      console.log('Test created with ID:', docRef.id);
+    } else {
+      console.log('Test already exists');
+    }
+  } catch (error) {
+    console.error('Error in createInitialTest:', error);
+    throw error;
   }
 };
 
@@ -354,44 +479,32 @@ export const initializeAdminUser = async () => {
 };
 
 // Admin Stats
-export const getAdminStats = async (): Promise<{
-  totalUsers: number;
-  activeUsers: number;
-  totalTests: number;
-  completionRate: number;
-}> => {
+export const getAdminStats = async () => {
   try {
     // Get total users
     const usersSnapshot = await getDocs(collection(db, 'users'));
     const totalUsers = usersSnapshot.size;
 
-    // Get active users (users who have taken a test in the last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const testResultsSnapshot = await getDocs(
-      query(
-        collection(db, 'testResults'),
-        where('completedAt', '>=', Timestamp.fromDate(thirtyDaysAgo))
-      )
-    );
-    
-    const activeUserIds = new Set(
-      testResultsSnapshot.docs.map(doc => doc.data().userId)
-    );
-    const activeUsers = activeUserIds.size;
+    // Get total tests
+    const testsSnapshot = await getDocs(collection(db, 'tests'));
+    const totalTests = testsSnapshot.size;
 
-    // Get total tests taken
-    const totalTests = testResultsSnapshot.size;
+    // Get test results for completion rate
+    const resultsRef = collection(db, 'testResults');
+    const resultsSnapshot = await getDocs(resultsRef);
+    const totalResults = resultsSnapshot.size;
 
-    // Calculate completion rate (completed tests / total users who started tests)
-    const completionRate = totalUsers > 0 ? (activeUsers / totalUsers) * 100 : 0;
+    // Calculate active users (users who have taken at least one test)
+    const activeUsersSet = new Set();
+    resultsSnapshot.docs.forEach(doc => {
+      activeUsersSet.add(doc.data().userId);
+    });
 
     return {
       totalUsers,
-      activeUsers,
+      activeUsers: activeUsersSet.size,
       totalTests,
-      completionRate
+      completionRate: totalUsers > 0 ? (totalResults / totalUsers) * 100 : 0
     };
   } catch (error) {
     console.error('Error getting admin stats:', error);
@@ -400,68 +513,31 @@ export const getAdminStats = async (): Promise<{
 };
 
 // Get all users with their stats
-export const getAllUsers = async (): Promise<Array<{
-  id: string;
-  email: string;
-  displayName: string;
-  lastActive: Date;
-  testsCompleted: number;
-}>> => {
+export const getAllUsers = async () => {
   try {
     const usersSnapshot = await getDocs(collection(db, 'users'));
-    const usersPromises = usersSnapshot.docs.map(async (doc) => {
-      const userData = doc.data();
-      
-      // Get user's test results
-      const testResultsSnapshot = await getDocs(
-        query(
-          collection(db, 'testResults'),
-          where('userId', '==', doc.id),
-          orderBy('completedAt', 'desc')
-        )
-      );
-
-      const lastActive = testResultsSnapshot.docs[0]?.data().completedAt?.toDate() || new Date(0);
-      const testsCompleted = testResultsSnapshot.size;
-
-      return {
-        id: doc.id,
-        email: userData.email || '',
-        displayName: userData.displayName || '',
-        lastActive,
-        testsCompleted
-      };
-    });
-
-    return Promise.all(usersPromises);
-  } catch (error) {
-    console.error('Error getting all users:', error);
-    throw error;
-  }
-};
-
-export const getUserPlan = async (userId: string) => {
-  try {
-    const userPlanQuery = query(
-      collection(db, 'userPlans'),
-      where('userId', '==', userId),
-      where('active', '==', true),
-      limit(1)
+    const users = await Promise.all(
+      usersSnapshot.docs.map(async (doc) => {
+        const userData = doc.data();
+        
+        // Get test results for this user
+        const resultsRef = collection(db, 'testResults');
+        const q = query(resultsRef, where('userId', '==', doc.id));
+        const resultsSnapshot = await getDocs(q);
+        
+        return {
+          id: doc.id,
+          email: userData.email || '',
+          displayName: userData.displayName || '',
+          lastActive: userData.lastActive?.toDate() || new Date(),
+          testsCompleted: resultsSnapshot.size
+        };
+      })
     );
     
-    const planSnapshot = await getDocs(userPlanQuery);
-    
-    if (planSnapshot.empty) {
-      return null;
-    }
-
-    const planDoc = planSnapshot.docs[0];
-    return {
-      id: planDoc.id,
-      ...planDoc.data()
-    };
+    return users;
   } catch (error) {
-    console.error('Error getting user plan:', error);
+    console.error('Error getting all users:', error);
     throw error;
   }
 };

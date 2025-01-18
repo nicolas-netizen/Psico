@@ -1,140 +1,171 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getUserStats, getUserPlan } from '../../services/firestore';
-import { Link, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-import { Test } from '../../types/Test';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase/firebaseConfig';
 import { toast } from 'react-hot-toast';
 
-interface UserStats {
-  totalTests: number;
-  completedTests: number;
-  averageScore: number;
+interface Test {
+  id: string;
+  title: string;
+  description: string;
 }
 
-const Dashboard: React.FC = () => {
+interface UserPlan {
+  planId: string;
+  planName: string;
+  tests: string[];
+  active: boolean;
+  endDate: any;
+}
+
+const Dashboard = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [stats, setStats] = useState<UserStats>({
-    totalTests: 0,
-    completedTests: 0,
-    averageScore: 0,
-  });
-  const [availableTests, setAvailableTests] = useState<Test[]>([]);
+  const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userPlan, setUserPlan] = useState<UserPlan | null>(null);
 
   useEffect(() => {
-    const loadUserData = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
+    const fetchUserData = async () => {
       try {
-        // Cargar estadísticas del usuario
-        const userStats = await getUserStats(user.uid);
-        setStats(userStats);
-
+        setLoading(true);
+        
         // Obtener el plan del usuario
-        const userPlan = await getUserPlan(user.uid);
-        
-        if (!userPlan) {
-          toast.error('No tienes un plan activo. Por favor, contacta al administrador.');
-          setLoading(false);
-          return;
+        if (user) {
+          const userPlanRef = doc(db, 'userPlans', user.uid);
+          const userPlanDoc = await getDoc(userPlanRef);
+          
+          if (userPlanDoc.exists()) {
+            setUserPlan(userPlanDoc.data() as UserPlan);
+          }
         }
 
-        // Obtener tests disponibles para el plan del usuario
-        const testsQuery = query(
-          collection(db, 'tests'),
-          where('plans', 'array-contains', userPlan.id),
-          where('status', '==', 'active')
-        );
-        
-        const testsSnapshot = await getDocs(testsQuery);
-        
-        if (testsSnapshot.empty) {
-          toast.info('No hay tests disponibles para tu plan en este momento');
-          setAvailableTests([]);
+        // Obtener los tests disponibles
+        const testsRef = collection(db, 'tests');
+        const snapshot = await getDocs(testsRef);
+        const testsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Test[];
+
+        // Filtrar tests según el plan del usuario
+        if (userPlan) {
+          const availableTests = testsData.filter(test => 
+            userPlan.tests.includes(test.id)
+          );
+          setTests(availableTests);
         } else {
-          const tests = testsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as Test[];
-          setAvailableTests(tests);
+          // Si no tiene plan, mostrar solo tests gratuitos
+          const freeTests = testsData.filter(test => 
+            test.id === 'test1' || test.id === 'test2' // IDs de tests gratuitos
+          );
+          setTests(freeTests);
         }
+
       } catch (error) {
-        console.error('Error loading user data:', error);
-        toast.error('Error al cargar los datos. Por favor, intenta de nuevo más tarde.');
-        setAvailableTests([]);
+        console.error('Error fetching data:', error);
+        toast.error('Error al cargar los datos');
       } finally {
         setLoading(false);
       }
     };
 
-    loadUserData();
+    fetchUserData();
   }, [user]);
-
-  const handleStartTest = (testId: string) => {
-    navigate(`/take-test/${testId}`);
-  };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando...</p>
-        </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
-
-      {/* Estadísticas del usuario */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold text-gray-700">Tests Completados</h3>
-          <p className="text-3xl font-bold text-blue-600">{stats.completedTests}</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold text-gray-700">Tests Disponibles</h3>
-          <p className="text-3xl font-bold text-green-600">{availableTests.length}</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold text-gray-700">Puntuación Promedio</h3>
-          <p className="text-3xl font-bold text-purple-600">{stats.averageScore}%</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 pb-32">
+        <div className="max-w-7xl mx-auto pt-12 px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-4xl font-extrabold text-white sm:text-5xl sm:tracking-tight lg:text-6xl">
+            Bienvenido a tu Dashboard
+          </h1>
+          <p className="mt-6 max-w-2xl mx-auto text-xl text-indigo-100">
+            Accede a tus tests psicológicos y descubre más sobre ti mismo
+          </p>
         </div>
       </div>
 
-      {/* Lista de tests disponibles */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4">Tests Disponibles</h2>
-        {availableTests.length === 0 ? (
-          <p className="text-gray-600">No hay tests disponibles en este momento.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {availableTests.map((test) => (
-              <div key={test.id} className="border rounded-lg p-4 hover:shadow-lg transition-shadow">
-                <h3 className="font-semibold text-lg mb-2">{test.title}</h3>
-                <p className="text-gray-600 text-sm mb-4">{test.description}</p>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500">
-                    {test.questions?.length || 0} preguntas
-                  </span>
-                  <button
-                    onClick={() => handleStartTest(test.id)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                  >
-                    Comenzar
-                  </button>
-                </div>
+      {/* Plan Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mt-[-4rem] mb-8">
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {userPlan ? `Plan ${userPlan.planName}` : 'Plan Gratuito'}
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  {userPlan ? 
+                    `Válido hasta ${new Date(userPlan.endDate.seconds * 1000).toLocaleDateString()}` :
+                    'Acceso limitado a tests básicos'}
+                </p>
+              </div>
+              {!userPlan && (
+                <Link
+                  to="/precios"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Actualizar Plan
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tests Grid */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Tests Disponibles</h2>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {tests.map((test) => (
+              <div
+                key={test.id}
+                className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow"
+              >
+                <h3 className="text-lg font-medium text-gray-900">{test.title}</h3>
+                <p className="mt-2 text-sm text-gray-500">{test.description}</p>
+                <button
+                  onClick={() => toast.success('Próximamente podrás realizar este test')}
+                  className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                >
+                  Comenzar Test
+                </button>
               </div>
             ))}
+          </div>
+          
+          {tests.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-500">No hay tests disponibles en este momento.</p>
+            </div>
+          )}
+        </div>
+
+        {!userPlan && (
+          <div className="mt-8 text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              ¿Quieres acceder a más tests?
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Actualiza tu plan para acceder a todos nuestros tests premium y características exclusivas
+            </p>
+            <Link
+              to="/precios"
+              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+            >
+              Ver Planes Premium
+            </Link>
           </div>
         )}
       </div>

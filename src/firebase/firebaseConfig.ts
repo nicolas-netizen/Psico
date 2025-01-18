@@ -1,19 +1,29 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDNTECvDxOYxhLCQfPGZKlDgLpbkwNpKkA",
-  authDomain: "psico-c4d4d.firebaseapp.com",
-  projectId: "psico-c4d4d",
-  storageBucket: "psico-c4d4d.appspot.com",
-  messagingSenderId: "1050096971441",
-  appId: "1:1050096971441:web:a1fd4d1e7b8f3e3d7e5e9a"
+  apiKey: "AIzaSyAzqhfR0oaRhUKneV_ixCWqORvW31Ybfbk",
+  authDomain: "psino-91747.firebaseapp.com",
+  projectId: "psino-91747",
+  storageBucket: "psino-91747.appspot.com",
+  messagingSenderId: "141588048823",
+  appId: "1:141588048823:web:de9dc0da762d0a0e2a5632",
+  measurementId: "G-RPR0346S55"
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+let app;
+if (!getApps().length) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApps()[0];
+}
+
 export const auth = getAuth(app);
+// Usar persistencia local para mantener la sesión
+setPersistence(auth, browserLocalPersistence);
+
+export const db = getFirestore(app);
 
 export default app;

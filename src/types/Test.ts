@@ -87,6 +87,33 @@ export enum Aptitude {
   EMOTIONAL_INTELLIGENCE = 'Inteligencia Emocional'
 }
 
+import { Timestamp } from 'firebase/firestore';
+
+export interface Question {
+  question: string;
+  options: string[];
+  correctAnswer: number;
+}
+
+export interface Test {
+  id?: string;
+  title: string;
+  description: string;
+  questions: Question[];
+  status: 'active' | 'inactive';
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface TestResult {
+  id?: string;
+  testId: string;
+  userId: string;
+  answers: number[];
+  score: number;
+  createdAt: Timestamp;
+}
+
 export interface TestOption {
   id: string;
   text: string;
@@ -121,57 +148,6 @@ export interface UserAnswer {
   difficulty?: string;
   isCorrect?: boolean;
   timeTaken?: number; 
-}
-
-export interface Test {
-  id: string;
-  title: string;
-  description: string;
-  timeLimit?: number;
-  plans: string[];
-  questions: Question[];
-  aptitudes: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface Question {
-  id: string;
-  text: string;
-  options: Option[];
-  correctAnswer: string;
-  aptitude: string;
-}
-
-export interface Option {
-  id: string;
-  text: string;
-}
-
-export interface AptitudeTest {
-  id: string;
-  name: string;
-  aptitude: Aptitude;
-  description: string;
-  categories: AptitudeQuestionCategory[];
-  questions: AptitudeQuestion[];
-  timeLimit: number;
-}
-
-export interface TestResult {
-  testId: string;
-  userId: string;
-  totalScore: number;
-  correctAnswers: number;
-  incorrectAnswers: number;
-  categoryPerformance: {
-    [category in QuestionCategory]: {
-      correctAnswers: number;
-      totalQuestions: number;
-      percentageScore: number;
-    }
-  };
-  completedAt: string;
 }
 
 export interface DetailedTestResult {

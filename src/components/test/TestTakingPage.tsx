@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowRight, 
   ArrowLeft 
 } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { AuthContext } from '../../context/AuthContext';
+import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext';
 
 // Enum for question categories
 enum QuestionCategory {
@@ -41,7 +41,7 @@ const TestTakingPage: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getTestById, submitTestAnswers } = useContext(AuthContext);
+  const { getTestById, submitTestAnswers } = useAuth();
 
   // State variables
   const [test, setTest] = useState<{ 

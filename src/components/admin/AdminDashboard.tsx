@@ -1,62 +1,77 @@
 import React, { useState } from 'react';
+import { Tab } from '@headlessui/react';
 import TestsManager from './TestsManager';
 import PlanManager from './PlanManager';
-import { toast } from 'react-hot-toast';
+import DiscountCodeManager from './DiscountCodeManager';
 
-const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'tests' | 'plans'>('tests');
+function classNames(...classes: string[]) {
+  return classes.filter(Boolean).join(' ');
+}
+
+const AdminDashboard = () => {
+  const [selectedTab, setSelectedTab] = useState(0);
+  const tabs = [
+    { name: 'Gestión de Tests', component: <TestsManager /> },
+    { name: 'Gestión de Planes', component: <PlanManager /> },
+    { name: 'Códigos de Descuento', component: <DiscountCodeManager /> }
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 pb-32">
-        <div className="max-w-7xl mx-auto pt-12 px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl font-extrabold text-white sm:text-5xl sm:tracking-tight lg:text-6xl">
-            Panel de Administración
-          </h1>
-          <p className="mt-6 max-w-2xl mx-auto text-xl text-indigo-100">
-            Gestiona los tests y planes de la plataforma
-          </p>
-        </div>
+      <div className="bg-indigo-600 pb-32">
+        <header className="py-10">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <h1 className="text-3xl font-bold tracking-tight text-white">
+              Panel de Administración
+            </h1>
+          </div>
+        </header>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mt-[-4rem]">
-          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-            {/* Tabs */}
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex" aria-label="Tabs">
-                <button
-                  onClick={() => setActiveTab('tests')}
-                  className={`${
-                    activeTab === 'tests'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm`}
+      <main className="-mt-32">
+        <div className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
+          <div className="rounded-lg bg-white px-5 py-6 shadow sm:px-6">
+            <div className="mb-8">
+              <div className="sm:hidden">
+                <select
+                  className="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                  value={selectedTab}
+                  onChange={(e) => setSelectedTab(Number(e.target.value))}
                 >
-                  Gestionar Tests
-                </button>
-                <button
-                  onClick={() => setActiveTab('plans')}
-                  className={`${
-                    activeTab === 'plans'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm`}
-                >
-                  Gestionar Planes
-                </button>
-              </nav>
+                  {tabs.map((tab, index) => (
+                    <option key={tab.name} value={index}>
+                      {tab.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="hidden sm:block">
+                <div className="border-b border-gray-200">
+                  <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                    {tabs.map((tab, index) => (
+                      <button
+                        key={tab.name}
+                        onClick={() => setSelectedTab(index)}
+                        className={classNames(
+                          selectedTab === index
+                            ? 'border-indigo-500 text-indigo-600'
+                            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
+                          'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium'
+                        )}
+                      >
+                        {tab.name}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+              </div>
             </div>
-
-            {/* Content */}
-            <div className="p-6">
-              {activeTab === 'tests' ? <TestsManager /> : <PlanManager />}
+            <div className="mt-4">
+              {tabs[selectedTab].component}
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

@@ -220,58 +220,66 @@ const PlanManager: React.FC = () => {
         </ul>
       </div>
 
-      {/* Edit/Create Modal */}
+      {/* Edit/Create Form */}
       {editingPlan && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-medium text-gray-900 mb-4">
               {isCreating ? 'Crear Nuevo Plan' : 'Editar Plan'}
             </h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                   Nombre
                 </label>
                 <input
                   type="text"
+                  id="name"
                   value={editingPlan.name}
                   onChange={(e) => setEditingPlan({ ...editingPlan, name: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
                   Descripción
                 </label>
                 <textarea
+                  id="description"
                   value={editingPlan.description}
                   onChange={(e) => setEditingPlan({ ...editingPlan, description: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  rows={3}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="price" className="block text-sm font-medium text-gray-700">
                   Precio
                 </label>
                 <input
                   type="number"
+                  id="price"
                   value={editingPlan.price}
                   onChange={(e) => setEditingPlan({ ...editingPlan, price: parseFloat(e.target.value) })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  min="0"
+                  step="0.01"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label htmlFor="duration" className="block text-sm font-medium text-gray-700">
                   Duración (días)
                 </label>
                 <input
                   type="number"
+                  id="duration"
                   value={editingPlan.duration}
                   onChange={(e) => setEditingPlan({ ...editingPlan, duration: parseInt(e.target.value) })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  min="1"
                   required
                 />
               </div>
@@ -281,8 +289,17 @@ const PlanManager: React.FC = () => {
                 </label>
                 <div className="mt-1 space-y-2">
                   {editingPlan.features.map((feature, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">{feature}</span>
+                    <div key={index} className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={feature}
+                        onChange={(e) => {
+                          const newFeatures = [...editingPlan.features];
+                          newFeatures[index] = e.target.value;
+                          setEditingPlan({ ...editingPlan, features: newFeatures });
+                        }}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      />
                       <button
                         type="button"
                         onClick={() => handleRemoveFeature(index)}
@@ -292,32 +309,32 @@ const PlanManager: React.FC = () => {
                       </button>
                     </div>
                   ))}
-                  <div className="flex space-x-2">
+                  <div className="flex items-center space-x-2">
                     <input
                       type="text"
                       value={newFeature}
                       onChange={(e) => setNewFeature(e.target.value)}
                       placeholder="Nueva característica"
-                      className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                     />
                     <button
                       type="button"
                       onClick={handleAddFeature}
-                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
                     >
                       Agregar
                     </button>
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end space-x-4">
+              <div className="flex justify-end space-x-3 mt-6">
                 <button
                   type="button"
                   onClick={() => {
                     setEditingPlan(null);
                     setIsCreating(false);
                   }}
-                  className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300"
+                  className="bg-white text-gray-700 px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50"
                 >
                   Cancelar
                 </button>
@@ -325,7 +342,7 @@ const PlanManager: React.FC = () => {
                   type="submit"
                   className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
                 >
-                  {isCreating ? 'Crear' : 'Guardar'}
+                  {isCreating ? 'Crear Plan' : 'Guardar Cambios'}
                 </button>
               </div>
             </form>

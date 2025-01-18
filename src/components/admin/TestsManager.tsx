@@ -59,10 +59,21 @@ const TestsManager: React.FC = () => {
     }
   };
 
-  const handleTestCreated = (newTest: Test) => {
-    setTests(prev => [newTest, ...prev]);
+  const handleTestSaved = (savedTest: Test) => {
+    setTests(prev => {
+      const index = prev.findIndex(t => t.id === savedTest.id);
+      if (index >= 0) {
+        // Actualizar test existente
+        const newTests = [...prev];
+        newTests[index] = savedTest;
+        return newTests;
+      } else {
+        // Agregar nuevo test
+        return [savedTest, ...prev];
+      }
+    });
     setIsModalOpen(false);
-    toast.success('Test creado exitosamente');
+    toast.success(isCreatingTest ? 'Test creado exitosamente' : 'Test actualizado exitosamente');
   };
 
   return (
@@ -71,7 +82,7 @@ const TestsManager: React.FC = () => {
         <h2 className="text-2xl font-bold">Gestión de Tests</h2>
         <button 
           onClick={handleCreateTest}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
         >
           Crear Nuevo Test
         </button>
@@ -82,31 +93,56 @@ const TestsManager: React.FC = () => {
         {tests.map(test => (
           <div 
             key={test.id} 
-            className="bg-white shadow-md rounded-lg p-4 flex justify-between items-center"
+            className="bg-white shadow-md rounded-lg p-4 hover:shadow-lg transition-shadow"
           >
-            <div>
-              <h3 className="text-lg font-semibold">{test.title}</h3>
-              <p className="text-gray-600">{test.description}</p>
-              <div className="text-sm text-gray-500 mt-2">
-                Planes asociados: {test.plans?.join(', ') || 'Ninguno'}
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">{test.title}</h3>
+                <p className="mt-1 text-gray-600">{test.description}</p>
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center text-sm text-gray-500">
+                    <span className="font-medium mr-2">Categoría:</span>
+                    {test.category}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <span className="font-medium mr-2">Tiempo:</span>
+                    {test.timeLimit} minutos
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <span className="font-medium mr-2">Preguntas:</span>
+                    {test.questions?.length || 0}
+                  </div>
+                  {test.plans?.length > 0 && (
+                    <div className="flex items-center text-sm text-gray-500">
+                      <span className="font-medium mr-2">Planes:</span>
+                      {test.plans.join(', ')}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="flex space-x-2">
-              <button 
-                onClick={() => handleEditTest(test)}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white py-1 px-3 rounded"
-              >
-                Editar
-              </button>
-              <button 
-                onClick={() => handleDeleteTest(test.id)}
-                className="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded"
-              >
-                Eliminar
-              </button>
+              <div className="flex space-x-2 ml-4">
+                <button 
+                  onClick={() => handleEditTest(test)}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white py-1 px-3 rounded transition-colors"
+                >
+                  Editar
+                </button>
+                <button 
+                  onClick={() => handleDeleteTest(test.id)}
+                  className="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded transition-colors"
+                >
+                  Eliminar
+                </button>
+              </div>
             </div>
           </div>
         ))}
+
+        {tests.length === 0 && (
+          <div className="text-center py-8 bg-white rounded-lg shadow">
+            <p className="text-gray-500">No hay tests creados aún</p>
+          </div>
+        )}
       </div>
 
       {/* Test Form Modal */}
@@ -114,7 +150,7 @@ const TestsManager: React.FC = () => {
         <TestForm
           test={selectedTest}
           onClose={() => setIsModalOpen(false)}
-          onSave={handleTestCreated}
+          onSave={handleTestSaved}
           isCreating={isCreatingTest}
         />
       )}

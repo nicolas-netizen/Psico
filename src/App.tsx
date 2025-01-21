@@ -12,7 +12,7 @@ import Register from './components/auth/Register';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Dashboard from './components/user/Dashboard';
-import TestTakingPage from './components/test/TestTakingPage';
+import TestTakingPage from './pages/TestTakingPage';
 import TestResultsPage from './components/test/TestResultsPage';
 import PlanList from './components/plans/PlanList';
 import Home from './pages/Home';

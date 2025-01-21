@@ -1,122 +1,185 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { baremoService } from '../services/baremoService';
+import { BaremoConfig, BaremoCategory } from '../types/baremo';
+import { toast } from 'react-toastify';
 
-const BaremoCalculator = () => {
-  const [formData, setFormData] = useState({
-    education: 0,
-    experience: 0,
-    courses: 0,
-    languages: 0,
-  });
+const BaremoCalculator: React.FC = () => {
+  const [loading, setLoading] = useState(true);
+  const [baremoConfig, setBaremoConfig] = useState<BaremoConfig | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [score, setScore] = useState<string>('');
+  const [result, setResult] = useState<number | null>(null);
+  const [error, setError] = useState<string>('');
 
-  const [total, setTotal] = useState(0);
+  useEffect(() => {
+    loadBaremoConfig();
+  }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    const newFormData = {
-      ...formData,
-      [name]: parseFloat(value),
-    };
-    setFormData(newFormData);
-
-    // Calculate total
-    const newTotal = Object.values(newFormData).reduce((acc, curr) => acc + curr, 0);
-    setTotal(newTotal);
+  const loadBaremoConfig = async () => {
+    try {
+      const config = await baremoService.getBaremoConfig();
+      setBaremoConfig(config);
+      if (config.categories.length > 0) {
+        setSelectedCategory(config.categories[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading baremo config:', error);
+      toast.error('Error al cargar la configuración del baremo');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const calculatePoints = () => {
+    if (!selectedCategory || !score) {
+      setError('Por favor, complete todos los campos');
+      return;
+    }
+
+    const numScore = parseFloat(score);
+    if (isNaN(numScore)) {
+      setError('El puntaje debe ser un número válido');
+      return;
+    }
+
+    const category = baremoConfig?.categories.find(c => c.id === selectedCategory);
+    const rules = baremoConfig?.rules.filter(r => r.category === selectedCategory) || [];
+
+    const matchingRule = rules.find(r => numScore >= r.minScore && numScore <= r.maxScore);
+
+    if (matchingRule) {
+      setResult(matchingRule.points);
+      setError('');
+    } else {
+      setError('No se encontró una regla para el puntaje ingresado');
+      setResult(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
   return (
-    <section className="py-16 bg-white" id="baremo">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Calculadora de Baremo
-          </h2>
-          <p className="text-gray-600">
-            Calcula tu puntuación adicional basada en tus méritos y estudios
-          </p>
+    <div className="space-y-8">
+      <div className="grid gap-6 md:grid-cols-2">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Categoría
+          </label>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            {baremoConfig?.categories.map((category: BaremoCategory) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+          {selectedCategory && (
+            <p className="mt-2 text-sm text-gray-500">
+              {baremoConfig?.categories.find(c => c.id === selectedCategory)?.description}
+            </p>
+          )}
         </div>
 
-        <div className="bg-gray-50 rounded-xl p-6 shadow-sm">
-          <div className="space-y-6">
-            {/* Educación */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nivel de Educación
-              </label>
-              <select
-                name="education"
-                onChange={handleInputChange}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-[#91c26a] focus:border-[#91c26a]"
-              >
-                <option value="0">Selecciona tu nivel</option>
-                <option value="2">Bachillerato</option>
-                <option value="3">Grado Superior</option>
-                <option value="4">Grado Universitario</option>
-                <option value="5">Máster</option>
-              </select>
-            </div>
-
-            {/* Experiencia */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Experiencia Laboral
-              </label>
-              <select
-                name="experience"
-                onChange={handleInputChange}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-[#91c26a] focus:border-[#91c26a]"
-              >
-                <option value="0">Selecciona tus años de experiencia</option>
-                <option value="1">1-2 años</option>
-                <option value="2">3-5 años</option>
-                <option value="3">Más de 5 años</option>
-              </select>
-            </div>
-
-            {/* Cursos */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cursos y Certificaciones
-              </label>
-              <select
-                name="courses"
-                onChange={handleInputChange}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-[#91c26a] focus:border-[#91c26a]"
-              >
-                <option value="0">Selecciona el número de cursos</option>
-                <option value="0.5">1-2 cursos</option>
-                <option value="1">3-5 cursos</option>
-                <option value="1.5">Más de 5 cursos</option>
-              </select>
-            </div>
-
-            {/* Idiomas */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nivel de Idiomas
-              </label>
-              <select
-                name="languages"
-                onChange={handleInputChange}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-[#91c26a] focus:border-[#91c26a]"
-              >
-                <option value="0">Selecciona tu nivel</option>
-                <option value="1">B1</option>
-                <option value="2">B2</option>
-                <option value="3">C1 o superior</option>
-              </select>
-            </div>
-
-            {/* Resultado */}
-            <div className="mt-8 p-4 bg-white rounded-lg border border-gray-200">
-              <div className="text-center">
-                <div className="text-sm text-gray-600 mb-2">Tu puntuación total de baremo es:</div>
-                <div className="text-4xl font-bold text-[#91c26a]">{total.toFixed(2)} puntos</div>
-              </div>
-            </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Puntaje
+          </label>
+          <div className="relative">
+            <input
+              type="number"
+              value={score}
+              onChange={(e) => setScore(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder="Ingrese el puntaje"
+            />
           </div>
         </div>
       </div>
-    </section>
+
+      <div className="flex justify-center">
+        <button
+          onClick={calculatePoints}
+          className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+        >
+          Calcular Puntos
+        </button>
+      </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-600 text-center">{error}</p>
+        </div>
+      )}
+
+      {result !== null && !error && (
+        <div className="p-6 bg-green-50 border border-green-200 rounded-lg text-center">
+          <h3 className="text-lg font-medium text-green-900 mb-2">
+            Resultado del Cálculo
+          </h3>
+          <div className="text-3xl font-bold text-green-600">
+            {result} puntos
+          </div>
+          <p className="mt-2 text-sm text-green-700">
+            {baremoConfig?.rules.find(r => 
+              r.category === selectedCategory && 
+              parseFloat(score) >= r.minScore && 
+              parseFloat(score) <= r.maxScore
+            )?.description}
+          </p>
+        </div>
+      )}
+
+      {/* Tabla de Referencia */}
+      <div className="mt-8">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">
+          Tabla de Referencia
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Rango de Puntaje
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Puntos
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Descripción
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {baremoConfig?.rules
+                .filter(rule => rule.category === selectedCategory)
+                .sort((a, b) => a.minScore - b.minScore)
+                .map((rule, index) => (
+                  <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {rule.minScore} - {rule.maxScore}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {rule.points}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {rule.description}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 };
 

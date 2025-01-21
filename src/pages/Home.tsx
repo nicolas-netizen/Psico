@@ -4,7 +4,6 @@ import Stats from '../components/Stats';
 import Features from '../components/Features';
 import Testimonials from '../components/Testimonials';
 import PlanList from '../components/plans/PlanList';
-import BaremoCalculator from '../components/BaremoCalculator';
 
 const Home = () => {
   return (
@@ -54,11 +53,6 @@ const Home = () => {
           </div>
         </div>
       </section>
-      
-      {/* Calculadora de Baremo con fondo suave */}
-      <div className="bg-gradient-to-t from-[#f0f7eb] to-white">
-        <BaremoCalculator />
-      </div>
     </div>
   );
 };

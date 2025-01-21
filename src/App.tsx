@@ -1,84 +1,109 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
+import { AuthProvider, useAuth } from './context/AuthContext';
+
+// Componentes de autenticación
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
+
+// Componentes principales
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import Dashboard from './components/user/Dashboard';
-import AdminDashboard from './components/admin/AdminDashboard';
-import AdminRoute from './components/auth/AdminRoute';
-import { AuthProvider, useAuth } from './context/AuthContext';
 import TestTakingPage from './components/test/TestTakingPage';
 import TestResultsPage from './components/test/TestResultsPage';
 import PlanList from './components/plans/PlanList';
 import Home from './pages/Home';
+import Admin from './pages/Admin';
+import BaremoCalculatorPage from './pages/BaremoCalculatorPage';
 
-// Componente protegido que requiere autenticación
+// Rutas protegidas
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { currentUser } = useAuth();
-  
-  if (!currentUser) {
-    return <Navigate to="/login" />;
-  }
-  
-  return <>{children}</>;
+  return currentUser ? <>{children}</> : <Navigate to="/login" />;
 };
 
-const AppContent = () => {
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { currentUser, isAdmin } = useAuth();
+  return currentUser && isAdmin ? <>{children}</> : <Navigate to="/login" />;
+};
+
+// Componente para manejar el layout
+const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
-  const showFooter = location.pathname === '/';
+  const isAuthPage = ['/login', '/register'].includes(location.pathname);
 
   return (
-    <div className="App min-h-screen flex flex-col">
-      <ToastContainer position="top-right" autoClose={3000} />
+    <div className="min-h-screen flex flex-col">
       <Navbar />
-      <div className="flex-grow">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={currentUser ? <Navigate to="/dashboard" /> : <Login />} />
-          <Route path="/register" element={currentUser ? <Navigate to="/dashboard" /> : <Register />} />
-          <Route path="/dashboard" element={
-            <PrivateRoute>
-              <Dashboard />
-            </PrivateRoute>
-          } />
-          <Route path="/admin" element={
-            <AdminRoute>
-              <AdminDashboard />
-            </AdminRoute>
-          } />
-          <Route path="/test/:testId" element={
-            <PrivateRoute>
-              <TestTakingPage />
-            </PrivateRoute>
-          } />
-          <Route path="/test-results/:resultId" element={
-            <PrivateRoute>
-              <TestResultsPage />
-            </PrivateRoute>
-          } />
-          <Route path="/plans" element={
-            <PrivateRoute>
-              <PlanList />
-            </PrivateRoute>
-          } />
-        </Routes>
+      <div className="flex-grow pt-16">
+        {children}
       </div>
-      {showFooter && <Footer />}
+      {!isAuthPage && <Footer />}
+      <ToastContainer position="bottom-right" />
     </div>
   );
 };
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route 
+              path="/dashboard" 
+              element={
+                <PrivateRoute>
+                  <Dashboard />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/admin/*" 
+              element={
+                <AdminRoute>
+                  <Admin />
+                </AdminRoute>
+              } 
+            />
+            <Route 
+              path="/test/:testId" 
+              element={
+                <PrivateRoute>
+                  <TestTakingPage />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/test/:testId/results" 
+              element={
+                <PrivateRoute>
+                  <TestResultsPage />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/plans" 
+              element={
+                <PrivateRoute>
+                  <PlanList />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/baremo" 
+              element={<BaremoCalculatorPage />}
+            />
+          </Routes>
+        </Layout>
+      </Router>
+    </AuthProvider>
   );
 }
 

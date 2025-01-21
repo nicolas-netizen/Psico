@@ -3,6 +3,7 @@ import { Tab } from '@headlessui/react';
 import TestsManager from './TestsManager';
 import PlanManager from './PlanManager';
 import DiscountCodeManager from './DiscountCodeManager';
+import BaremoAdmin from '../../pages/admin/BaremoAdmin';
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ');
@@ -13,6 +14,7 @@ const AdminDashboard = () => {
   const tabs = [
     { name: 'Gestión de Tests', component: <TestsManager /> },
     { name: 'Gestión de Planes', component: <PlanManager /> },
+    { name: 'Gestión de Baremo', component: <BaremoAdmin /> },
     { name: 'Códigos de Descuento', component: <DiscountCodeManager /> }
   ];
 

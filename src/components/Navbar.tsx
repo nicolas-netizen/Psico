@@ -20,56 +20,64 @@ const Navbar = () => {
     }
   };
 
+  const handleNavigation = (path: string) => {
+    setIsOpen(false);
+    navigate(path);
+  };
+
   return (
     <nav className="fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md shadow-sm z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
-            <Link to="/" className="flex items-center space-x-2 text-2xl font-bold text-[#91c26a] hover:text-[#7ea756] transition-colors">
+            <button 
+              onClick={() => handleNavigation('/')}
+              className="flex items-center space-x-2 text-2xl font-bold text-[#91c26a] hover:text-[#7ea756] transition-colors"
+            >
               <GraduationCap className="h-8 w-8" />
               <span>AcademiaChapiri</span>
-            </Link>
+            </button>
           </div>
 
           {/* Desktop Menu */}
           <div className="hidden md:flex md:items-center md:space-x-4">
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link
-                to="/"
+              <button
+                onClick={() => handleNavigation('/')}
                 className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:scale-105"
               >
                 Inicio
-              </Link>
-              <Link
-                to="/recursos"
+              </button>
+              <button
+                onClick={() => handleNavigation('/baremo')}
                 className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:scale-105"
               >
-                Recursos
-              </Link>
+                Calculadora de Baremo
+              </button>
               {user && (
                 <>
                   {isAdmin ? (
-                    <Link
-                      to="/admin"
+                    <button
+                      onClick={() => handleNavigation('/admin')}
                       className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:scale-105"
                     >
                       Panel Admin
-                    </Link>
+                    </button>
                   ) : (
-                    <Link
-                      to="/dashboard"
+                    <button
+                      onClick={() => handleNavigation('/dashboard')}
                       className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:scale-105"
                     >
                       Mi Panel
-                    </Link>
+                    </button>
                   )}
-                  <Link
-                    to="/plans"
+                  <button
+                    onClick={() => handleNavigation('/plans')}
                     className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:scale-105"
                   >
                     Planes
-                  </Link>
+                  </button>
                 </>
               )}
             </div>
@@ -93,18 +101,18 @@ const Navbar = () => {
                 </div>
               ) : (
                 <>
-                  <Link
-                    to="/login"
+                  <button
+                    onClick={() => handleNavigation('/login')}
                     className="text-gray-700 hover:text-[#91c26a] px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:scale-105"
                   >
                     Iniciar Sesión
-                  </Link>
-                  <Link
-                    to="/register"
+                  </button>
+                  <button
+                    onClick={() => handleNavigation('/register')}
                     className="bg-[#91c26a] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7ea756] transition-all duration-300 hover:scale-105 hover:shadow-md"
                   >
                     Registrarse
-                  </Link>
+                  </button>
                 </>
               )}
             </div>
@@ -131,46 +139,41 @@ const Navbar = () => {
       {isOpen && (
         <div className="md:hidden absolute top-16 inset-x-0 bg-white/90 backdrop-blur-md shadow-lg rounded-b-2xl border-t border-gray-100">
           <div className="px-4 pt-2 pb-3 space-y-1">
-            <Link
-              to="/"
-              onClick={() => setIsOpen(false)}
+            <button
+              onClick={() => handleNavigation('/')}
               className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[#91c26a] hover:bg-gray-50 transition-colors"
             >
               Inicio
-            </Link>
-            <Link
-              to="/recursos"
-              onClick={() => setIsOpen(false)}
+            </button>
+            <button
+              onClick={() => handleNavigation('/baremo')}
               className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[#91c26a] hover:bg-gray-50 transition-colors"
             >
-              Recursos
-            </Link>
+              Calculadora de Baremo
+            </button>
             {user && (
               <>
                 {isAdmin ? (
-                  <Link
-                    to="/admin"
-                    onClick={() => setIsOpen(false)}
+                  <button
+                    onClick={() => handleNavigation('/admin')}
                     className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[#91c26a] hover:bg-gray-50 transition-colors"
                   >
                     Panel Admin
-                  </Link>
+                  </button>
                 ) : (
-                  <Link
-                    to="/dashboard"
-                    onClick={() => setIsOpen(false)}
+                  <button
+                    onClick={() => handleNavigation('/dashboard')}
                     className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[#91c26a] hover:bg-gray-50 transition-colors"
                   >
                     Mi Panel
-                  </Link>
+                  </button>
                 )}
-                <Link
-                  to="/plans"
-                  onClick={() => setIsOpen(false)}
+                <button
+                  onClick={() => handleNavigation('/plans')}
                   className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-[#91c26a] hover:bg-gray-50 transition-colors"
                 >
                   Planes
-                </Link>
+                </button>
               </>
             )}
             {user ? (
@@ -190,20 +193,18 @@ const Navbar = () => {
               </div>
             ) : (
               <div className="px-3 py-3 border-t border-gray-100 mt-2 space-y-2">
-                <Link
-                  to="/login"
-                  onClick={() => setIsOpen(false)}
+                <button
+                  onClick={() => handleNavigation('/login')}
                   className="block w-full text-center px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:text-[#91c26a] hover:bg-gray-50 transition-colors"
                 >
                   Iniciar Sesión
-                </Link>
-                <Link
-                  to="/register"
-                  onClick={() => setIsOpen(false)}
+                </button>
+                <button
+                  onClick={() => handleNavigation('/register')}
                   className="block w-full text-center bg-[#91c26a] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7ea756] transition-colors"
                 >
                   Registrarse
-                </Link>
+                </button>
               </div>
             )}
           </div>

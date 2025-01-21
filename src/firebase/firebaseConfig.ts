@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 
@@ -13,17 +13,8 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let app;
-if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApps()[0];
-}
-
+export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-// Usar persistencia local para mantener la sesión
-setPersistence(auth, browserLocalPersistence);
-
 export const db = getFirestore(app);
 
-export default app;
+setPersistence(auth, browserLocalPersistence);

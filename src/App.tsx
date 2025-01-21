@@ -18,6 +18,7 @@ import PlanList from './components/plans/PlanList';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
 import BaremoCalculatorPage from './pages/BaremoCalculatorPage';
+import TestResults from './components/test/TestResults';
 
 // Rutas protegidas
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
@@ -99,6 +100,14 @@ function App() {
             <Route 
               path="/baremo" 
               element={<BaremoCalculatorPage />}
+            />
+            <Route 
+              path="/results" 
+              element={
+                <PrivateRoute>
+                  <TestResults />
+                </PrivateRoute>
+              } 
             />
           </Routes>
         </Layout>

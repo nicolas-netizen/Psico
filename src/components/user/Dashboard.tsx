@@ -24,6 +24,40 @@ interface Test {
   timeLimit: number;
 }
 
+interface ProgressBarProps {
+  percentage: number;
+}
+
+const ProgressBar: React.FC<ProgressBarProps> = ({ percentage }) => {
+  const getColorClass = (percentage: number) => {
+    if (percentage >= 80) return 'bg-[#91c26a]'; // Verde para excelente
+    if (percentage >= 50) return 'bg-yellow-500'; // Amarillo para aprobado
+    return 'bg-red-500'; // Rojo para no aprobado
+  };
+
+  const getStatusText = (percentage: number) => {
+    if (percentage >= 80) return 'Completado';
+    if (percentage >= 50) return 'Aprobado';
+    return 'No Aprobado';
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="h-4 w-full bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${getColorClass(percentage)} transition-all duration-300 flex items-center justify-center text-white text-xs font-medium`}
+          style={{ width: `${percentage}%` }}
+        >
+          {percentage.toFixed(1)}%
+        </div>
+      </div>
+      <div className={`text-xs font-medium ${percentage < 50 ? 'text-red-500' : 'text-gray-600'}`}>
+        {getStatusText(percentage)}
+      </div>
+    </div>
+  );
+};
+
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -34,10 +68,13 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [applyingDiscount, setApplyingDiscount] = useState(false);
   const [discountedPrice, setDiscountedPrice] = useState<number | null>(null);
+  const [recentResults, setRecentResults] = useState<any[]>([]);
+  const [loadingResults, setLoadingResults] = useState(true);
 
   useEffect(() => {
     loadUserData();
     loadAvailablePlans();
+    loadRecentResults();
   }, [currentUser]);
 
   const loadUserData = async () => {
@@ -186,6 +223,33 @@ const Dashboard = () => {
     }
   };
 
+  const loadRecentResults = async () => {
+    if (!currentUser) return;
+    
+    try {
+      setLoadingResults(true);
+      const results = await getDocs(collection(db, 'testResults', currentUser.uid, 'results'));
+      // Ordenar por fecha más reciente y tomar los últimos 5
+      const sortedResults = results.docs.map(doc => doc.data())
+        .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())
+        .slice(0, 5);
+      setRecentResults(sortedResults);
+    } catch (error) {
+      console.error('Error al cargar resultados recientes:', error);
+      toast.error('Error al cargar los resultados recientes');
+    } finally {
+      setLoadingResults(false);
+    }
+  };
+
+  const handleViewAllResults = () => {
+    navigate('/results');
+  };
+
+  const handleRetakeTest = (testId: string) => {
+    navigate(`/test/${testId}`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -257,6 +321,83 @@ const Dashboard = () => {
           ) : (
             <div className="text-center py-8">
               <p className="text-gray-600">No hay tests disponibles para tu plan actual</p>
+            </div>
+          )}
+        </div>
+
+        {/* Resultados Recientes */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Resultados Recientes</h2>
+            {recentResults.length > 0 && (
+              <button
+                onClick={handleViewAllResults}
+                className="text-[#91c26a] hover:text-[#7ea756] font-medium"
+              >
+                Ver todos
+              </button>
+            )}
+          </div>
+
+          {loadingResults ? (
+            <div className="flex justify-center items-center h-40">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#91c26a]"></div>
+            </div>
+          ) : recentResults.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-600 mb-4">No hay resultados disponibles</p>
+              <button
+                onClick={() => navigate('/tests')}
+                className="text-[#91c26a] hover:text-[#7ea756] font-medium"
+              >
+                Realizar tu primer test
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {recentResults.map((result) => {
+                const percentage = (result.score / result.totalQuestions) * 100;
+                return (
+                  <div 
+                    key={result.id} 
+                    className={`bg-white border rounded-lg p-6 ${
+                      percentage < 50 ? 'border-red-300' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-800">
+                          {result.testName || 'Test sin nombre'}
+                        </h4>
+                        <p className="text-sm text-gray-600">
+                          {new Date(result.completedAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleRetakeTest(result.testId)}
+                          className="text-[#91c26a] hover:text-[#7ea756] text-sm font-medium"
+                        >
+                          Repetir Test
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-gray-700 mb-2">
+                        Puntuación: {result.score}/{result.totalQuestions}
+                      </p>
+                      <ProgressBar percentage={percentage} />
+                    </div>
+
+                    {percentage < 50 && (
+                      <div className="mt-3 text-sm text-red-500">
+                        Test no completado satisfactoriamente. Se recomienda volver a intentar.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

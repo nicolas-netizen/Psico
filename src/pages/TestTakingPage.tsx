@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { testService, Test, Question } from '../services/testService';
+import { testResultService } from '../services/testResultService';
 
 const TestTakingPage: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
@@ -152,31 +153,25 @@ const TestTakingPage: React.FC = () => {
 
       // Validaciones previas al envío
       if (!test) {
-        console.error('No hay un test cargado para enviar');
-        toast.error('El test no está cargado correctamente.');
-        return;
+        throw new Error('No hay un test cargado para enviar');
       }
 
       if (!test.id) {
         console.error('Test sin ID válido:', test);
-        toast.error('El test no tiene un ID válido.');
-        return;
+        throw new Error('El test no tiene un ID válido');
       }
 
       if (!currentUser) {
-        console.error('Usuario no autenticado');
-        toast.error('No hay un usuario autenticado');
-        return;
+        throw new Error('No hay un usuario autenticado');
       }
 
       if (!testId || testId !== test.id) {
         console.error('Discrepancia en IDs del test:', { urlId: testId, testId: test.id });
-        toast.error('ID del test no válido o no coincide');
-        return;
+        throw new Error('ID del test no válido o no coincide');
       }
 
       // Validar que tenemos todas las respuestas necesarias
-      if (test.questions && !validateAnswers(test.questions, answers)) {
+      if (!validateAnswers(test.questions, answers)) {
         console.log('Respuestas incompletas:', answers);
         toast.warning('Debes responder todas las preguntas antes de enviar el test');
         return;
@@ -185,9 +180,7 @@ const TestTakingPage: React.FC = () => {
       // Calcular y validar puntuación
       const percentage = calculateScore(test.questions, answers);
       if (isNaN(percentage) || percentage < 0 || percentage > 100) {
-        console.error('Error al calcular la puntuación del test');
-        toast.error('Error al calcular la puntuación del test');
-        return;
+        throw new Error('Error al calcular la puntuación del test');
       }
 
       console.log('Enviando resultados del test:', {
@@ -197,17 +190,26 @@ const TestTakingPage: React.FC = () => {
         score: percentage
       });
 
-      // Enviar resultados
-      await testService.submitTest({
-        testId,
+      // Guardar el resultado en la base de datos
+      const result = await testResultService.saveTestResult({
         userId: currentUser.uid,
-        answers,
+        testId: test.id,
         score: percentage,
+        totalQuestions: test.questions.length,
+        answers,
+        completedAt: new Date(),
+        testName: test.name,
+        testDescription: test.description
       });
 
       setScore(percentage);
       toast.success('Test enviado correctamente');
       console.log('Test enviado exitosamente con puntuación:', percentage);
+
+      // Redirigir a la página de resultados después de un breve delay
+      setTimeout(() => {
+        navigate('/results');
+      }, 2000);
     } catch (error) {
       console.error('Error al enviar el test:', error);
       toast.error(error instanceof Error ? error.message : 'Error al enviar el test');

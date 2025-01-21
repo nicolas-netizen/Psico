@@ -9,6 +9,7 @@ import {
 import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase/firebaseConfig';
 import { Test } from '../types/Test';
+import { Plan } from '../types/Plan';
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;
@@ -18,6 +19,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   getTestById: (testId: string) => Promise<Test>;
   submitTestAnswers: (testId: string, answers: any[]) => Promise<void>;
+  getPlans: () => Promise<Plan[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -97,6 +99,19 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     // Implementar la lógica de envío de respuestas
   };
 
+  const getPlans = async (): Promise<Plan[]> => {
+    try {
+      const plansSnapshot = await getDocs(collection(db, 'plans'));
+      return plansSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Plan[];
+    } catch (error) {
+      console.error('Error fetching plans:', error);
+      throw error;
+    }
+  };
+
   const value = {
     currentUser,
     isAdmin,
@@ -104,7 +119,8 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     register,
     logout,
     getTestById,
-    submitTestAnswers
+    submitTestAnswers,
+    getPlans
   };
 
   return (

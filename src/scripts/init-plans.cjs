@@ -1,5 +1,5 @@
 const { initializeApp } = require('firebase/app');
-const { getFirestore, collection, addDoc } = require('firebase/firestore');
+const { getFirestore, collection, doc, setDoc } = require('firebase/firestore');
 
 const firebaseConfig = {
   apiKey: "AIzaSyDRvnQPH3vvpFvVSGXKvZPtWK6d5CYZxGs",
@@ -10,68 +10,73 @@ const firebaseConfig = {
   appId: "1:1014806736515:web:f6c4e1c5d1b4e0d5b2d6e9"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 const plans = [
   {
+    id: 'basic',
     name: 'Plan Básico',
-    description: 'Ideal para comenzar tu evaluación psicológica',
-    price: 9.99,
+    price: 1999,
+    description: 'Ideal para comenzar tu preparación',
     features: [
       'Acceso a tests básicos',
-      'Resultados instantáneos',
-      'Reporte básico',
-      'Validez por 30 días'
-    ]
+      'Recursos de estudio fundamentales',
+      'Seguimiento de progreso básico',
+      'Soporte por email'
+    ],
+    recommended: false,
+    featured: false
   },
   {
+    id: 'pro',
     name: 'Plan Profesional',
-    description: 'Para una evaluación psicológica completa',
-    price: 19.99,
+    price: 3999,
+    description: 'La mejor opción para una preparación completa',
     features: [
-      'Todos los tests disponibles',
-      'Resultados detallados',
-      'Reporte profesional',
-      'Seguimiento personalizado',
-      'Validez por 30 días'
-    ]
+      'Acceso a todos los tests',
+      'Recursos de estudio avanzados',
+      'Seguimiento detallado de progreso',
+      'Soporte prioritario',
+      'Sesiones de práctica grupal',
+      'Guías de estudio personalizadas'
+    ],
+    recommended: true,
+    featured: true
   },
   {
+    id: 'premium',
     name: 'Plan Premium',
-    description: 'La experiencia más completa de evaluación',
-    price: 29.99,
+    price: 5999,
+    description: 'Preparación intensiva y personalizada',
     features: [
-      'Acceso ilimitado a todos los tests',
-      'Resultados detallados con gráficos',
-      'Reporte premium con recomendaciones',
-      'Seguimiento personalizado',
-      'Consulta con especialista',
-      'Validez por 30 días'
-    ]
+      'Todo lo incluido en el Plan Profesional',
+      'Mentoría personalizada',
+      'Sesiones de práctica individual',
+      'Análisis detallado de resultados',
+      'Recursos exclusivos',
+      'Acceso anticipado a nuevos materiales',
+      'Soporte 24/7'
+    ],
+    recommended: false,
+    featured: true
   }
 ];
 
 async function initializePlans() {
   try {
-    console.log('Iniciando la creación de planes...');
-    
-    // Agregar cada plan a Firestore
     for (const plan of plans) {
-      const docRef = await addDoc(collection(db, 'plans'), {
+      await setDoc(doc(db, 'plans', plan.id), {
         ...plan,
         createdAt: new Date(),
         updatedAt: new Date()
       });
-      console.log('Plan creado con ID:', docRef.id);
+      console.log(`Plan ${plan.name} created successfully`);
     }
-    
-    console.log('Planes inicializados correctamente');
+    console.log('All plans initialized successfully');
   } catch (error) {
-    console.error('Error inicializando planes:', error);
+    console.error('Error initializing plans:', error);
   }
 }
 
-// Ejecutar la inicialización
 initializePlans();

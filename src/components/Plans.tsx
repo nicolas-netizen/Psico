@@ -1,110 +1,214 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { motion } from 'framer-motion';
+import { Check, Star, Award, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Plan } from '../types/Plan';
-import { toast } from 'react-toastify';
-import { CheckCircle2, XCircle, StarIcon } from 'lucide-react';
 
-const Plans: React.FC<{ showFeaturedOnly?: boolean }> = ({ showFeaturedOnly = false }) => {
-  const { getPlans, purchasePlan, user, updateUser } = useAuth();
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface Plan {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  features: string[];
+  recommended?: boolean;
+  featured?: boolean;
+}
 
-  useEffect(() => {
-    const fetchPlans = async () => {
-      try {
-        const fetchedPlans = await getPlans();
-        // Filter plans if showFeaturedOnly is true
-        const displayPlans = showFeaturedOnly 
-          ? fetchedPlans.filter(plan => plan.recommended || plan.featured)
-          : fetchedPlans;
-        
-        setPlans(displayPlans);
-        setLoading(false);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-        setError(errorMessage);
-        toast.error(`No se pudieron cargar los planes: ${errorMessage}`);
-        setLoading(false);
+interface PlansProps {
+  hideActions?: boolean;
+}
+
+const Plans: React.FC<PlansProps> = ({ hideActions = false }) => {
+  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.2,
+        delayChildren: 0.1
       }
-    };
-
-    fetchPlans();
-  }, [showFeaturedOnly]);
-
-  const handlePurchasePlan = async (planId: string) => {
-    try {
-      await purchasePlan(planId);
-      toast.success('Plan comprado exitosamente');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      toast.error(`Error al comprar el plan: ${errorMessage}`);
     }
   };
 
-  if (loading) {
-    return <div>Cargando planes...</div>;
-  }
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        ease: [0.22, 1, 0.36, 1]
+      }
+    }
+  };
 
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
+  const handlePurchase = (planId: string) => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    // Implementar lógica de compra
+    console.log('Comprando plan:', planId);
+  };
+
+  const plans: Plan[] = [
+    {
+      id: 'basic',
+      name: 'Plan Básico',
+      price: 1999,
+      description: 'Ideal para comenzar tu preparación',
+      features: [
+        'Acceso a tests básicos',
+        'Material de estudio fundamental',
+        'Seguimiento básico de progreso',
+        'Soporte por email'
+      ]
+    },
+    {
+      id: 'pro',
+      name: 'Plan Profesional',
+      price: 3999,
+      description: 'La mejor opción para la mayoría',
+      features: [
+        'Todo lo del Plan Básico',
+        'Tests avanzados y especializados',
+        'Material de estudio completo',
+        'Seguimiento detallado',
+        'Soporte prioritario',
+        'Sesiones grupales de práctica'
+      ],
+      recommended: true
+    },
+    {
+      id: 'premium',
+      name: 'Plan Premium',
+      price: 5999,
+      description: 'Preparación intensiva y personalizada',
+      features: [
+        'Todo lo del Plan Profesional',
+        'Tests exclusivos premium',
+        'Material especializado',
+        'Mentoría personalizada',
+        'Soporte 24/7',
+        'Sesiones privadas de práctica',
+        'Garantía de aprobación'
+      ],
+      featured: true
+    }
+  ];
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-center mb-8">Elige tu Plan</h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {plans.map((plan) => (
-          <div 
-            key={plan.id} 
-            className={`
-              bg-white shadow-lg rounded-lg p-6 transform transition-all hover:scale-105 
-              ${plan.recommended ? 'border-4 border-green-500' : ''}
-              relative
-            `}
+    <motion.div
+      className="py-16 bg-gradient-to-br from-[#F5F7FA] via-white to-[#f0f7eb]"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Encabezado */}
+        <div className="text-center mb-16">
+          <motion.h2 
+            className="text-4xl font-bold text-gray-900 mb-4"
+            variants={itemVariants}
           >
-            {(plan.recommended || plan.featured) && (
-              <div className="absolute top-0 right-0 m-2 p-1 bg-green-500 text-white rounded-full">
-                <StarIcon size={20} className="text-white" />
-              </div>
-            )}
-            <h2 className="text-2xl font-semibold mb-4">
-              {plan.name}
-              {plan.recommended && (
-                <span className="ml-2 text-sm text-green-600 font-normal">
-                  (Recomendado)
-                </span>
-              )}
-            </h2>
-            <p className="text-gray-600 mb-4">{plan.description}</p>
-            <div className="text-3xl font-bold mb-4">
-              ${plan.price}/mes
-            </div>
-            <ul className="mb-6">
-              {plan.features.map((feature, index) => (
-                <li key={index} className="flex items-center mb-2">
-                  <CheckCircle2 className="text-green-500 mr-2" size={20} />
-                  {feature}
-                </li>
-              ))}
-            </ul>
-            <button 
-              onClick={() => handlePurchasePlan(plan.id)}
+            Planes diseñados para tu éxito
+          </motion.h2>
+          <motion.p 
+            className="text-xl text-gray-600 max-w-2xl mx-auto"
+            variants={itemVariants}
+          >
+            Elige el plan que mejor se adapte a tus necesidades y comienza tu preparación hoy mismo.
+          </motion.p>
+        </div>
+
+        {/* Grid de planes */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+          {plans.map((plan) => (
+            <motion.div
+              key={plan.id}
               className={`
-                w-full py-2 rounded-lg transition-colors 
-                ${user?.subscription?.planId === plan.id 
-                  ? 'bg-gray-300 text-gray-600 cursor-not-allowed' 
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-                }
+                relative bg-white rounded-2xl shadow-lg overflow-hidden
+                ${plan.recommended ? 'ring-2 ring-[#91c26a] scale-105 z-10' : ''}
+                hover:shadow-xl transition-all duration-300
               `}
-              disabled={user?.subscription?.planId === plan.id}
+              variants={itemVariants}
             >
-              {user?.subscription?.planId === plan.id ? 'Plan Actual' : 'Comprar Plan'}
-            </button>
-          </div>
-        ))}
+              {/* Badge de recomendado/destacado */}
+              {(plan.recommended || plan.featured) && (
+                <div className={`
+                  absolute top-4 right-4 px-3 py-1 rounded-full text-sm font-medium
+                  ${plan.recommended ? 'bg-[#91c26a] text-white' : 'bg-yellow-400 text-gray-900'}
+                `}>
+                  {plan.recommended && (
+                    <div className="flex items-center space-x-1">
+                      <Star className="w-4 h-4" />
+                      <span>Recomendado</span>
+                    </div>
+                  )}
+                  {plan.featured && (
+                    <div className="flex items-center space-x-1">
+                      <Award className="w-4 h-4" />
+                      <span>Destacado</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Contenido del plan */}
+              <div className="p-8">
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
+                <p className="text-gray-600 mb-6">{plan.description}</p>
+                <div className="flex items-baseline mb-8">
+                  <span className="text-4xl font-bold text-gray-900">${plan.price}</span>
+                  <span className="text-gray-600 ml-2">/mes</span>
+                </div>
+
+                {/* Lista de características */}
+                <ul className="space-y-4 mb-8">
+                  {plan.features.map((feature, index) => (
+                    <li key={index} className="flex items-start">
+                      <Check className="w-5 h-5 text-[#91c26a] mt-0.5 flex-shrink-0" />
+                      <span className="ml-3 text-gray-600">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Botón de acción */}
+                {!hideActions && (
+                  <motion.button
+                    onClick={() => handlePurchase(plan.id)}
+                    className={`
+                      w-full py-4 px-6 rounded-xl font-semibold flex items-center justify-center space-x-2
+                      ${plan.recommended || plan.featured
+                        ? 'bg-gradient-to-r from-[#91c26a] to-[#6ea844] text-white hover:shadow-lg'
+                        : 'bg-white text-[#91c26a] border-2 border-[#91c26a] hover:bg-[#f0f7eb]'
+                      }
+                      transition-all duration-300 hover:scale-105
+                    `}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <span>Comenzar Ahora</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </motion.button>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Nota adicional */}
+        <motion.p 
+          className="text-center text-gray-600 mt-8"
+          variants={itemVariants}
+        >
+          ¿Necesitas un plan personalizado? <button className="text-[#91c26a] font-medium hover:underline">Contáctanos</button>
+        </motion.p>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

@@ -39,6 +39,9 @@ const TestResults: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+      if (!currentUser) {
+        throw new Error('Usuario no autenticado');
+      }
       const userResults = await testResultService.getUserResults(currentUser.uid);
       setResults(userResults);
     } catch (error) {
@@ -87,7 +90,7 @@ const TestResults: React.FC = () => {
       doc.text('Historial de Tests:', 20, 60);
       
       let yPosition = 70;
-      results.forEach((result, index) => {
+      results.forEach(result => {
         if (yPosition > 250) {
           doc.addPage();
           yPosition = 20;
@@ -151,7 +154,7 @@ const TestResults: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {results.map((result) => (
+          {results.map(result => (
             <div
               key={result.id}
               className="bg-white p-6 rounded-lg shadow-md"

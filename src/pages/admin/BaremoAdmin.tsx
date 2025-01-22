@@ -3,12 +3,15 @@ import { BaremoConfig, BaremoCategory, BaremoRule } from '../../types/baremo';
 import { baremoService } from '../../services/baremoService';
 import { toast } from 'react-toastify';
 import AddBaremoCategory from '../../components/baremo/AddBaremoCategory';
+import EditBaremoRule from '../../components/baremo/EditBaremoRule';
+import EditBaremoCategory from '../../components/baremo/EditBaremoCategory';
 
 const BaremoAdmin: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [baremoConfig, setBaremoConfig] = useState<BaremoConfig | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [editingRule, setEditingRule] = useState<BaremoRule | null>(null);
+  const [editingCategory, setEditingCategory] = useState<BaremoCategory | null>(null);
   const [showAddCategory, setShowAddCategory] = useState(false);
 
   useEffect(() => {
@@ -31,6 +34,7 @@ const BaremoAdmin: React.FC = () => {
     try {
       await baremoService.updateCategory(category);
       await loadBaremoConfig();
+      setEditingCategory(null);
       toast.success('Categoría actualizada correctamente');
     } catch (error) {
       toast.error('Error al actualizar la categoría');
@@ -53,6 +57,7 @@ const BaremoAdmin: React.FC = () => {
     try {
       await baremoService.updateRule(rule);
       await loadBaremoConfig();
+      setEditingRule(null);
       toast.success('Regla actualizada correctamente');
     } catch (error) {
       toast.error('Error al actualizar la regla');
@@ -127,27 +132,53 @@ const BaremoAdmin: React.FC = () => {
           {baremoConfig?.categories.map((category) => (
             <div
               key={category.id}
-              className={`border rounded-lg p-4 hover:border-[#91c26a] transition-colors cursor-pointer ${
+              className={`border rounded-lg p-4 hover:border-[#91c26a] transition-colors ${
                 selectedCategory === category.id ? 'border-[#91c26a] bg-green-50' : ''
               }`}
-              onClick={() => setSelectedCategory(category.id)}
             >
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-medium text-gray-900">{category.name}</h4>
-                <span className="text-sm text-gray-500">
-                  Max: {category.maxPoints} pts
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 mb-2">{category.description}</p>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteCategory(category.id);
-                }}
-                className="text-red-600 hover:text-red-800 text-sm"
-              >
-                Eliminar
-              </button>
+              {editingCategory?.id === category.id ? (
+                <EditBaremoCategory
+                  category={category}
+                  onSave={handleCategoryChange}
+                  onCancel={() => setEditingCategory(null)}
+                />
+              ) : (
+                <>
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium text-gray-900">{category.name}</h4>
+                    <span className="text-sm text-gray-500">
+                      Max: {category.maxPoints || 0} pts
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-2">{category.description}</p>
+                  <div className="text-sm text-gray-500 mb-2">
+                    <p>Puntaje máximo: {category.maxScore || 0}</p>
+                    <p>Puntos asignados: {category.maxPoints || 0}</p>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <button
+                        onClick={() => setSelectedCategory(category.id)}
+                        className="text-[#91c26a] hover:text-[#7ea756] text-sm mr-3"
+                      >
+                        Ver Reglas
+                      </button>
+                      <button
+                        onClick={() => setEditingCategory(category)}
+                        className="text-[#91c26a] hover:text-[#7ea756] text-sm"
+                      >
+                        Editar
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteCategory(category.id)}
+                      className="text-red-600 hover:text-red-800 text-sm"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -191,29 +222,41 @@ const BaremoAdmin: React.FC = () => {
                   .filter(rule => rule.category === selectedCategory)
                   .map((rule) => (
                     <tr key={rule.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {rule.minScore} - {rule.maxScore}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {rule.points} pts
-                      </td>
-                      <td className="px-6 py-4">
-                        {rule.description}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => setEditingRule(rule)}
-                          className="text-[#91c26a] hover:text-[#7ea756] mr-3"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRule(rule.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          Eliminar
-                        </button>
-                      </td>
+                      {editingRule?.id === rule.id ? (
+                        <td colSpan={4} className="px-6 py-4">
+                          <EditBaremoRule
+                            rule={rule}
+                            onSave={handleRuleChange}
+                            onCancel={() => setEditingRule(null)}
+                          />
+                        </td>
+                      ) : (
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {rule.minScore} - {rule.maxScore}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {rule.points} pts
+                          </td>
+                          <td className="px-6 py-4">
+                            {rule.description}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <button
+                              onClick={() => setEditingRule(rule)}
+                              className="text-[#91c26a] hover:text-[#7ea756] mr-3"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRule(rule.id)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              Eliminar
+                            </button>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
               </tbody>

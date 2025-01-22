@@ -11,7 +11,8 @@ export interface BaremoCategory {
   id: string;
   name: string;
   description: string;
-  maxPoints: number;
+  maxScore: number;    // Puntaje máximo posible para esta categoría
+  maxPoints: number;   // Puntos máximos asignados por el admin
 }
 
 export interface BaremoConfig {

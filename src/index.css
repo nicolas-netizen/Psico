@@ -4,6 +4,37 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Estilos personalizados para la barra de desplazamiento */
+::-webkit-scrollbar {
+  width: 12px;
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-track {
+  background-color: rgba(145, 194, 106, 0.2);
+  border-radius: 8px;
+  border: 1px solid rgba(145, 194, 106, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(145, 194, 106, 0.8);
+  border-radius: 8px;
+  border: 2px solid rgba(145, 194, 106, 0.2);
+  background-clip: padding-box;
+  transition: all 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #91c26a;
+  border: 2px solid rgba(145, 194, 106, 0.4);
+}
+
+/* Para Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #91c26a rgba(145, 194, 106, 0.2);
+}
+
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;

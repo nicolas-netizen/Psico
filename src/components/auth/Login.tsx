@@ -15,9 +15,15 @@ const Login = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      await login(email, password);
+      const userRole = await login(email, password);
       toast.success('¡Inicio de sesión exitoso!');
-      navigate('/dashboard');
+      
+      // Redirigir según el rol del usuario
+      if (userRole === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error) {
       console.error('Error al iniciar sesión:', error);
       toast.error('Error al iniciar sesión. Por favor, verifica tus credenciales.');

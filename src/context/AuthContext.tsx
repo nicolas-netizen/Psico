@@ -14,7 +14,7 @@ import { Plan } from '../types/Plan';
 interface AuthContextType {
   currentUser: FirebaseUser | null;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<{ isAdmin: boolean }>;
+  login: (email: string, password: string) => Promise<string>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   getTestById: (testId: string) => Promise<Test>;
@@ -60,9 +60,11 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      const isUserAdmin = userDoc.exists() && userDoc.data()?.role === 'admin';
+      const userData = userDoc.data();
+      const userRole = userData?.role || 'user';
+      const isUserAdmin = userRole === 'admin';
       setIsAdmin(isUserAdmin);
-      return { isAdmin: isUserAdmin };
+      return userRole;
     } catch (error) {
       console.error('Login error:', error);
       throw error;

@@ -20,6 +20,9 @@ import Home from './pages/Home';
 import Admin from './pages/Admin';
 import BaremoCalculatorPage from './pages/BaremoCalculatorPage';
 import TestResults from './components/test/TestResults';
+import TestPortal from './pages/user/TestPortal';
+import TakeTest from './pages/user/TakeTest';
+import AdminDashboard from './components/admin/AdminDashboard';
 
 // Rutas protegidas
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
@@ -70,9 +73,11 @@ function App() {
       <Router>
         <Layout>
           <Routes>
-            <Route path="/" element={<Home />} />
+            {/* Rutas públicas */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            
+            {/* Rutas de usuario */}
             <Route 
               path="/dashboard" 
               element={
@@ -82,49 +87,34 @@ function App() {
               } 
             />
             <Route 
-              path="/admin/*" 
+              path="/test-portal" 
               element={
-                <AdminRoute>
-                  <Admin />
-                </AdminRoute>
+                <PrivateRoute>
+                  <TestPortal />
+                </PrivateRoute>
               } 
             />
             <Route 
               path="/test/:testId" 
               element={
                 <PrivateRoute>
-                  <TestTakingPage />
+                  <TakeTest />
                 </PrivateRoute>
               } 
             />
+            
+            {/* Rutas de administrador */}
             <Route 
-              path="/test/:testId/results" 
+              path="/admin/*" 
               element={
-                <PrivateRoute>
-                  <TestResultsPage />
-                </PrivateRoute>
+                <AdminRoute>
+                  <AdminDashboard />
+                </AdminRoute>
               } 
             />
-            <Route 
-              path="/plans" 
-              element={
-                <PrivateRoute>
-                  <PlanList />
-                </PrivateRoute>
-              } 
-            />
-            <Route 
-              path="/baremo" 
-              element={<BaremoCalculatorPage />}
-            />
-            <Route 
-              path="/results" 
-              element={
-                <PrivateRoute>
-                  <TestResults />
-                </PrivateRoute>
-              } 
-            />
+
+            {/* Redirección por defecto */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Layout>
       </Router>

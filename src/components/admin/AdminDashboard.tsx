@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { Tab } from '@headlessui/react';
-import TestsManager from './TestsManager';
-import PlanManager from './PlanManager';
-import DiscountCodeManager from './DiscountCodeManager';
-import BaremoAdmin from '../../pages/admin/BaremoAdmin';
+import TestManagement from './TestManagement';
+import QuestionManagement from './QuestionManagement';
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ');
@@ -12,68 +10,57 @@ function classNames(...classes: string[]) {
 const AdminDashboard = () => {
   const [selectedTab, setSelectedTab] = useState(0);
   const tabs = [
-    { name: 'Gestión de Tests', component: <TestsManager /> },
-    { name: 'Gestión de Planes', component: <PlanManager /> },
-    { name: 'Gestión de Baremo', component: <BaremoAdmin /> },
-    { name: 'Códigos de Descuento', component: <DiscountCodeManager /> }
+    { name: 'Gestión de Tests', component: <TestManagement /> },
+    { name: 'Gestión de Preguntas', component: <QuestionManagement /> }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pt-24 pb-10 px-4 sm:px-6 lg:px-8">
-      <div className="bg-indigo-600 pb-32">
-        <header className="py-10">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <h1 className="text-3xl font-bold tracking-tight text-white">
-              Panel de Administración
-            </h1>
-          </div>
-        </header>
-      </div>
-
-      <main className="-mt-32">
-        <div className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
-          <div className="rounded-lg bg-white px-5 py-6 shadow sm:px-6">
-            <div className="mb-8">
-              <div className="sm:hidden">
-                <select
-                  className="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
-                  value={selectedTab}
-                  onChange={(e) => setSelectedTab(Number(e.target.value))}
-                >
-                  {tabs.map((tab, index) => (
-                    <option key={tab.name} value={index}>
-                      {tab.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="hidden sm:block">
-                <div className="border-b border-gray-200">
-                  <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                    {tabs.map((tab, index) => (
-                      <button
-                        key={tab.name}
-                        onClick={() => setSelectedTab(index)}
-                        className={classNames(
-                          selectedTab === index
-                            ? 'border-indigo-500 text-indigo-600'
-                            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
-                          'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium'
-                        )}
-                      >
-                        {tab.name}
-                      </button>
-                    ))}
-                  </nav>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4">
-              {tabs[selectedTab].component}
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Panel de Administración
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Gestiona los tests y preguntas del sistema
+          </p>
         </div>
-      </main>
+
+        <div className="bg-white rounded-lg shadow">
+          <Tab.Group selectedIndex={selectedTab} onChange={setSelectedTab}>
+            <Tab.List className="flex space-x-1 rounded-t-lg border-b p-1">
+              {tabs.map((tab) => (
+                <Tab
+                  key={tab.name}
+                  className={({ selected }) =>
+                    classNames(
+                      'w-full rounded-lg py-2.5 text-sm font-medium leading-5',
+                      'ring-white ring-opacity-60 ring-offset-2 focus:outline-none focus:ring-2',
+                      selected
+                        ? 'bg-[#91c26a] text-white shadow'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    )
+                  }
+                >
+                  {tab.name}
+                </Tab>
+              ))}
+            </Tab.List>
+            <Tab.Panels className="p-6">
+              {tabs.map((tab, idx) => (
+                <Tab.Panel
+                  key={idx}
+                  className={classNames(
+                    'rounded-xl focus:outline-none'
+                  )}
+                >
+                  {tab.component}
+                </Tab.Panel>
+              ))}
+            </Tab.Panels>
+          </Tab.Group>
+        </div>
+      </div>
     </div>
   );
 };

@@ -4,8 +4,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
-  User as FirebaseUser,
-  sendPasswordResetEmail
+  User as FirebaseUser
 } from 'firebase/auth';
 import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase/firebaseConfig';
@@ -18,7 +17,6 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<string>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
   getTestById: (testId: string) => Promise<Test>;
   submitTestAnswers: (testId: string, answers: any[]) => Promise<void>;
   getPlans: () => Promise<Plan[]>;
@@ -37,7 +35,6 @@ const useAuth = () => {
 const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -54,7 +51,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       } else {
         setIsAdmin(false);
       }
-      setLoading(false);
     });
 
     return unsubscribe;
@@ -88,10 +84,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const logout = async () => {
     await firebaseSignOut(auth);
     setIsAdmin(false);
-  };
-
-  const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
   };
 
   const getTestById = async (testId: string): Promise<Test> => {
@@ -128,7 +120,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     login,
     register,
     logout,
-    resetPassword,
     getTestById,
     submitTestAnswers,
     getPlans
@@ -136,7 +127,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };

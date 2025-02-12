@@ -5,7 +5,6 @@ import TestsManager from '../components/admin/TestsManager';
 import PlansManager from '../components/admin/PlansManager';
 import DiscountCodeManager from '../components/admin/DiscountCodeManager';
 import BaremoAdmin from './admin/BaremoAdmin';
-import QuestionManagement from './admin/QuestionManagement';
 
 const Admin: React.FC = () => {
   const { currentUser, isAdmin } = useAuth();
@@ -72,14 +71,6 @@ const Admin: React.FC = () => {
               </li>
               <li className="mr-1">
                 <a
-                  href="#questions"
-                  className="bg-white inline-block py-2 px-4 text-gray-600 hover:text-blue-600 font-semibold"
-                >
-                  Gestión de Preguntas
-                </a>
-              </li>
-              <li className="mr-1">
-                <a
                   href="#plans"
                   className="bg-white inline-block py-2 px-4 text-gray-600 hover:text-blue-600 font-semibold"
                 >
@@ -108,9 +99,6 @@ const Admin: React.FC = () => {
           <div className="p-6">
             <div id="tests">
               <TestsManager />
-            </div>
-            <div id="questions" className="hidden">
-              <QuestionManagement />
             </div>
             <div id="plans" className="hidden">
               <PlansManager />

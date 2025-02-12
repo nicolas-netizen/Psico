@@ -89,73 +89,17 @@ export enum Aptitude {
 
 import { Timestamp } from 'firebase/firestore';
 
-export enum QuestionBlock {
-  VERBAL = 'VERBAL',
-  NUMERICO = 'NUMERICO',
-  ESPACIAL = 'ESPACIAL',
-  MECANICO = 'MECANICO',
-  PERCEPTIVO = 'PERCEPTIVO',
-  MEMORIA = 'MEMORIA',
-  ABSTRACTO = 'ABSTRACTO'
-}
-
-export enum TestDifficulty {
-  FACIL = 'Fácil',
-  INTERMEDIO = 'Intermedio',
-  DIFICIL = 'Difícil'
-}
-
-export const BLOCK_ORDER = [
-  QuestionBlock.VERBAL,
-  QuestionBlock.NUMERICO,
-  QuestionBlock.ESPACIAL,
-  QuestionBlock.MECANICO,
-  QuestionBlock.PERCEPTIVO,
-  QuestionBlock.MEMORIA,
-  QuestionBlock.ABSTRACTO
-];
-
-export type QuestionFormat = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'SHORT_ANSWER' | 'OPEN_ANSWER';
-
-export interface Answer {
-  text: string;
-  imageUrl?: string;
-  isCorrect: boolean;
-}
-
-export interface MathQuestion {
-  question: string;
-  answer: string;
-}
-
 export interface Question {
-  id?: string;
-  title: string;
-  block: QuestionBlock;
-  format: QuestionFormat;
-  imageUrl?: string;
-  answers: Answer[];
-  mathQuestion?: MathQuestion;
-  status: 'active' | 'inactive';
-  createdAt: Date;
-  updatedAt: Date;
+  question: string;
+  options: string[];
+  correctAnswer: number;
 }
-
-export interface BlockConfig {
-  block: QuestionBlock;
-  questionCount: number;
-  timeLimit: number;
-}
-
-export type TestType = 'SIMULACRO' | 'PRACTICA' | 'EVALUACION';
 
 export interface Test {
   id?: string;
   title: string;
   description: string;
-  type: TestType;
-  difficulty: TestDifficulty;
-  blockConfigs: BlockConfig[];
+  questions: Question[];
   status: 'active' | 'inactive';
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -165,36 +109,35 @@ export interface TestResult {
   id?: string;
   testId: string;
   userId: string;
-  answers: {
-    questionId: string;
-    selectedAnswer: number;
-    isCorrect: boolean;
-  }[];
-  blockScores: {
-    block: QuestionBlock;
-    correct: number;
-    total: number;
-  }[];
-  totalScore: number;
-  startedAt: Date;
-  finishedAt: Date;
+  answers: number[];
+  score: number;
+  createdAt: Timestamp;
 }
 
-export const DEFAULT_SIMULACRO_CONFIG: BlockConfig[] = BLOCK_ORDER.map(block => ({
-  block,
-  questionCount: 15,
-  timeLimit: block === QuestionBlock.MEMORIA ? 20 : 15
-}));
+export interface TestOption {
+  id: string;
+  text: string;
+  isCorrect?: boolean;
+}
+
+export interface TestQuestion {
+  id: string;
+  text: string;
+  options: (string | { text: string; id?: string })[];
+  correctAnswer: number;
+  category?: string;
+  difficulty?: string;
+}
+
+export interface AptitudeQuestion extends TestQuestion {
+  category: AptitudeCategory;
+  difficulty: AptitudeDifficulty;
+}
 
 export interface AptitudeQuestionCategory {
   id: string;
   name: AptitudeCategory;
   description: string;
-  difficulty: AptitudeDifficulty;
-}
-
-export interface AptitudeQuestion extends Question {
-  category: AptitudeCategory;
   difficulty: AptitudeDifficulty;
 }
 
@@ -228,23 +171,3 @@ export interface DetailedTestResult {
   strengths: QuestionCategory[];
   weaknesses: QuestionCategory[];
 }
-
-export interface TestOption {
-  id: string;
-  text: string;
-  isCorrect?: boolean;
-}
-
-export interface TestQuestion {
-  id: string;
-  text: string;
-  options: (string | { text: string; id?: string })[];
-  correctAnswer: number;
-  category?: string;
-  difficulty?: string;
-}
-
-export const calculateGrade = (correctCount: number, totalCount: number): number => {
-  const pointsPerQuestion = 0.067;
-  return Math.min(correctCount * pointsPerQuestion, 7);
-};

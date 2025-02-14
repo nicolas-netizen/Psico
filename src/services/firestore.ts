@@ -22,6 +22,7 @@ export interface Plan {
   price: number;
   features: string[];
   isFeatured?: boolean;
+  hasCustomTest?: boolean;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -57,6 +58,46 @@ export interface UserRole {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+export interface Question {
+  id?: string;
+  type: 'text' | 'memory' | 'distraction' | 'sequence';
+  block: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface TextQuestion extends Question {
+  type: 'text';
+  question: string;
+  options: string[];
+  correctAnswer: number;
+}
+
+export interface MemoryQuestion extends Question {
+  type: 'memory';
+  images: string[];  // URLs de las 4 imágenes
+  correctImageIndex: number;  // Índice de la imagen correcta (0-3)
+  followUpQuestion: {
+    question: string;  // Pregunta sobre la imagen correcta
+    options: string[];  // Opciones de respuesta
+    correctAnswer: number;  // Índice de la respuesta correcta
+  };
+}
+
+export interface DistractionQuestion extends Question {
+  type: 'distraction';
+  content: string;
+  duration: number;
+}
+
+export interface SequenceQuestion extends Question {
+  type: 'sequence';
+  sequence: string[];
+  correctOrder: number[];
+}
+
+export type QuestionType = TextQuestion | MemoryQuestion | DistractionQuestion | SequenceQuestion;
 
 // Plans
 export const getPlans = async (): Promise<Plan[]> => {
@@ -168,39 +209,38 @@ export const getFeaturedPlan = async (): Promise<Plan | null> => {
   }
 };
 
-export const getFreePlan = async () => {
+export const getFreePlan = async (): Promise<Plan | null> => {
   try {
     const plansRef = collection(db, 'plans');
-    const q = query(plansRef, where('name', '==', 'Plan Gratuito'));
+    const q = query(plansRef, where('name', '==', 'Free'), limit(1));
     const querySnapshot = await getDocs(q);
-    
-    if (!querySnapshot.empty) {
-      const planDoc = querySnapshot.docs[0];
-      return {
-        id: planDoc.id,
-        ...planDoc.data()
-      } as Plan;
+
+    if (querySnapshot.empty) {
+      // Si no existe el plan gratuito, lo creamos
+      const freePlan = {
+        name: 'Free',
+        description: 'Plan gratuito con funcionalidades básicas',
+        price: 0,
+        features: [
+          'Acceso a tests básicos',
+          'Resultados básicos',
+          'Soporte por email'
+        ],
+        hasCustomTest: false,
+        isFeatured: false,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+
+      const docRef = await addDoc(plansRef, freePlan);
+      return { id: docRef.id, ...freePlan };
     }
-    
-    // Si no existe el plan gratuito, lo creamos
-    const freePlan = {
-      name: 'Plan Gratuito',
-      description: 'Plan básico con acceso a tests esenciales',
-      price: 0,
-      features: ['Acceso a tests básicos', 'Resultados inmediatos'],
-      isFeatured: false,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    };
-    
-    const newPlanRef = await addDoc(collection(db, 'plans'), freePlan);
-    return {
-      id: newPlanRef.id,
-      ...freePlan
-    } as Plan;
+
+    const doc = querySnapshot.docs[0];
+    return { id: doc.id, ...doc.data() } as Plan;
   } catch (error) {
-    console.error('Error getting/creating free plan:', error);
-    throw error;
+    console.error('Error getting free plan:', error);
+    return null;
   }
 };
 
@@ -539,5 +579,149 @@ export const getAllUsers = async () => {
   } catch (error) {
     console.error('Error getting all users:', error);
     throw error;
+  }
+};
+
+// Questions
+export const getQuestions = async (): Promise<QuestionType[]> => {
+  try {
+    const questionsRef = collection(db, 'questions');
+    const querySnapshot = await getDocs(questionsRef);
+    
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as QuestionType[];
+  } catch (error) {
+    console.error('Error fetching questions:', error);
+    throw new Error('Error al obtener las preguntas');
+  }
+};
+
+export const createInitialQuestions = async () => {
+  try {
+    const questionsRef = collection(db, 'questions');
+    const querySnapshot = await getDocs(questionsRef);
+    
+    if (querySnapshot.empty) {
+      const initialQuestions = [
+        {
+          type: 'text',
+          block: "Psicología Cognitiva",
+          question: "¿Cuál es el principal objetivo de la psicología cognitiva?",
+          options: [
+            "Estudiar el comportamiento observable",
+            "Analizar los procesos mentales",
+            "Investigar el inconsciente",
+            "Examinar las respuestas fisiológicas"
+          ],
+          correctAnswer: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        {
+          type: 'text',
+          block: "Desarrollo",
+          question: "¿Qué teoría propuso Jean Piaget?",
+          options: [
+            "Teoría del desarrollo cognitivo",
+            "Teoría del condicionamiento operante",
+            "Teoría del psicoanálisis",
+            "Teoría de la personalidad"
+          ],
+          correctAnswer: 0,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        {
+          type: 'text',
+          block: "Terapia",
+          question: "¿Cuál es el enfoque principal de la terapia conductual?",
+          options: [
+            "Modificar pensamientos negativos",
+            "Cambiar comportamientos problemáticos",
+            "Explorar el pasado",
+            "Analizar sueños"
+          ],
+          correctAnswer: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        {
+          type: 'text',
+          block: "Memoria",
+          question: "¿Qué es la memoria de trabajo?",
+          options: [
+            "Almacenamiento a largo plazo",
+            "Sistema de manipulación temporal de información",
+            "Memoria autobiográfica",
+            "Memoria sensorial"
+          ],
+          correctAnswer: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        }
+      ];
+
+      for (const question of initialQuestions) {
+        await addDoc(questionsRef, question);
+      }
+
+      console.log('Initial questions created successfully');
+    }
+  } catch (error) {
+    console.error('Error creating initial questions:', error);
+    throw new Error('Error al crear las preguntas iniciales');
+  }
+};
+
+export const createInitialPlans = async () => {
+  try {
+    const plansRef = collection(db, 'plans');
+    const querySnapshot = await getDocs(plansRef);
+    
+    if (querySnapshot.empty) {
+      const plans = [
+        {
+          name: 'Free',
+          description: 'Plan gratuito con funcionalidades básicas',
+          price: 0,
+          features: [
+            'Acceso a tests básicos',
+            'Resultados básicos',
+            'Soporte por email'
+          ],
+          hasCustomTest: false,
+          isFeatured: false,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        {
+          name: 'Premium',
+          description: 'Plan premium con todas las funcionalidades',
+          price: 19.99,
+          features: [
+            'Acceso a todos los tests',
+            'Tests personalizados',
+            'Resultados detallados',
+            'Soporte prioritario',
+            'Sin anuncios'
+          ],
+          hasCustomTest: true,
+          isFeatured: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        }
+      ];
+
+      for (const plan of plans) {
+        await addDoc(plansRef, plan);
+      }
+
+      console.log('Initial plans created successfully');
+    }
+  } catch (error) {
+    console.error('Error creating initial plans:', error);
+    throw new Error('Error al crear los planes iniciales');
   }
 };

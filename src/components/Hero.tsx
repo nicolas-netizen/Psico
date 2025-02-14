@@ -73,9 +73,9 @@ const Hero = () => {
           >
             <img 
               src="/Logo.png" 
-              alt="Logo" 
-              className="h-28 w-auto object-contain filter brightness-105 contrast-125" 
-              style={{ maxWidth: '240px' }}
+              alt="Academia Chapiri" 
+              className="h-28 w-auto object-contain filter brightness-100 contrast-100" 
+              style={{ maxWidth: '240px', minWidth: '200px' }}
             />
           </motion.div>
 

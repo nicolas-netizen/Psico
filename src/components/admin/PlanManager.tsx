@@ -11,6 +11,7 @@ interface Plan {
   features: string[];
   active: boolean;
   duration: number; // en días
+  hasCustomTest: boolean; // Nueva propiedad
 }
 
 const PlanManager: React.FC = () => {
@@ -100,7 +101,8 @@ const PlanManager: React.FC = () => {
           price: editingPlan.price,
           features: editingPlan.features,
           active: true,
-          duration: editingPlan.duration
+          duration: editingPlan.duration,
+          hasCustomTest: editingPlan.hasCustomTest
         });
         toast.success('Plan creado correctamente');
       } else {
@@ -109,7 +111,8 @@ const PlanManager: React.FC = () => {
           description: editingPlan.description,
           price: editingPlan.price,
           features: editingPlan.features,
-          duration: editingPlan.duration
+          duration: editingPlan.duration,
+          hasCustomTest: editingPlan.hasCustomTest
         });
         toast.success('Plan actualizado correctamente');
       }
@@ -131,7 +134,8 @@ const PlanManager: React.FC = () => {
       price: 0,
       features: [],
       active: true,
-      duration: 30
+      duration: 30,
+      hasCustomTest: false
     });
   };
 
@@ -174,6 +178,11 @@ const PlanManager: React.FC = () => {
                       <span className="text-sm font-medium text-gray-900">
                         ${plan.price} / {plan.duration} días
                       </span>
+                      {plan.hasCustomTest && (
+                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Test Personalizado
+                        </span>
+                      )}
                     </div>
                     <div className="mt-2">
                       <h4 className="text-sm font-medium text-gray-900">Características:</h4>
@@ -282,6 +291,17 @@ const PlanManager: React.FC = () => {
                   min="1"
                   required
                 />
+              </div>
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={editingPlan.hasCustomTest}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, hasCustomTest: e.target.checked })}
+                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Incluye Test Personalizado</span>
+                </label>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">

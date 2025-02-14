@@ -8,6 +8,7 @@ interface PlanFormData {
   price: number;
   features: string[];
   isFeatured: boolean;
+  hasCustomTest: boolean;
 }
 
 const PlansManager: React.FC = () => {
@@ -20,6 +21,7 @@ const PlansManager: React.FC = () => {
     price: 0,
     features: [''],
     isFeatured: false,
+    hasCustomTest: false,
   });
 
   useEffect(() => {
@@ -76,6 +78,7 @@ const PlansManager: React.FC = () => {
       price: 0,
       features: [''],
       isFeatured: false,
+      hasCustomTest: false,
     });
     setEditingPlan(null);
   };
@@ -108,6 +111,7 @@ const PlansManager: React.FC = () => {
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            rows={3}
             required
           />
         </div>
@@ -124,9 +128,33 @@ const PlansManager: React.FC = () => {
         </div>
 
         <div>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={formData.hasCustomTest}
+              onChange={(e) => setFormData({ ...formData, hasCustomTest: e.target.checked })}
+              className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Incluye Test Personalizado</span>
+          </label>
+        </div>
+
+        <div>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={formData.isFeatured}
+              onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
+              className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Plan destacado</span>
+          </label>
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-gray-700">Características</label>
           {formData.features.map((feature, index) => (
-            <div key={index} className="flex mt-1">
+            <div key={index} className="mt-1 flex space-x-2">
               <input
                 type="text"
                 value={feature}
@@ -144,7 +172,7 @@ const PlansManager: React.FC = () => {
                   const newFeatures = formData.features.filter((_, i) => i !== index);
                   setFormData({ ...formData, features: newFeatures });
                 }}
-                className="ml-2 px-2 py-1 text-red-600 hover:text-red-800"
+                className="text-red-600 hover:text-red-800"
               >
                 Eliminar
               </button>
@@ -153,83 +181,80 @@ const PlansManager: React.FC = () => {
           <button
             type="button"
             onClick={() => setFormData({ ...formData, features: [...formData.features, ''] })}
-            className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+            className="mt-2 text-indigo-600 hover:text-indigo-800"
           >
             + Agregar característica
           </button>
         </div>
 
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            checked={formData.isFeatured}
-            onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
-            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-          />
-          <label className="ml-2 block text-sm text-gray-900">Plan destacado</label>
-        </div>
-
         <div className="flex justify-end space-x-3">
-          {editingPlan && (
-            <button
-              type="button"
-              onClick={resetForm}
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Cancelar
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={resetForm}
+            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
           <button
             type="submit"
             className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
           >
-            {editingPlan ? 'Actualizar' : 'Crear'}
+            {editingPlan ? 'Guardar Cambios' : 'Crear Plan'}
           </button>
         </div>
       </form>
 
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
-        <ul className="divide-y divide-gray-200">
-          {plans.map((plan) => (
-            <li key={plan.id} className="px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">{plan.name}</h3>
-                  <p className="text-sm text-gray-500">{plan.description}</p>
-                  <p className="text-sm font-medium text-gray-900">Precio: ${plan.price}</p>
-                  <ul className="mt-2 text-sm text-gray-500">
-                    {plan.features.map((feature, index) => (
-                      <li key={index}>• {feature}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => {
-                      setEditingPlan(plan);
-                      setFormData({
-                        name: plan.name,
-                        description: plan.description,
-                        price: plan.price,
-                        features: plan.features,
-                        isFeatured: plan.isFeatured || false,
-                      });
-                    }}
-                    className="text-indigo-600 hover:text-indigo-900"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(plan.id!)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    Eliminar
-                  </button>
-                </div>
+      <div className="mt-8 space-y-4">
+        {plans.map((plan) => (
+          <div key={plan.id} className="bg-white p-6 rounded-lg shadow">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">{plan.name}</h3>
+                <p className="mt-1 text-gray-500">{plan.description}</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900">${plan.price}</p>
+                {plan.hasCustomTest && (
+                  <span className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    Test Personalizado
+                  </span>
+                )}
+                <ul className="mt-4 space-y-2">
+                  {plan.features.map((feature, index) => (
+                    <li key={index} className="flex items-center text-gray-600">
+                      <svg className="h-5 w-5 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </li>
-          ))}
-        </ul>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => {
+                    setEditingPlan(plan);
+                    setFormData({
+                      name: plan.name,
+                      description: plan.description,
+                      price: plan.price,
+                      features: plan.features,
+                      isFeatured: plan.isFeatured || false,
+                      hasCustomTest: plan.hasCustomTest || false,
+                    });
+                  }}
+                  className="text-indigo-600 hover:text-indigo-900"
+                >
+                  Editar
+                </button>
+                <button
+                  onClick={() => handleDelete(plan.id!)}
+                  className="text-red-600 hover:text-red-900"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

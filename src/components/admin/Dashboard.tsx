@@ -1,274 +1,324 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Users, BookOpen, Settings, BarChart3, PlusCircle } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, Timestamp } from "firebase/firestore";
+import { db } from "../../firebase/firebaseConfig";
+import { Users, BookOpen, Clock, Target, Award, TrendingUp, AlertCircle } from 'lucide-react';
+
+interface RecentTest {
+  id: string;
+  userName: string;
+  testName: string;
+  score: number;
+  date: Date;
+}
+
+interface UserActivity {
+  email: string;
+  lastActive: Date;
+  planName: string;
+}
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('overview');
-  const userEmail = localStorage.getItem('userEmail') || '';
+  const navigate = useNavigate();
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeTests: 0,
+    completedTests: 0,
+    averageScore: 0,
+    premiumUsers: 0,
+    totalQuestions: 0,
+    todayActiveUsers: 0
+  });
+  const [recentTests, setRecentTests] = useState<RecentTest[]>([]);
+  const [activeUsers, setActiveUsers] = useState<UserActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Datos de ejemplo para el dashboard
-  const stats = {
-    totalUsers: 156,
-    activeTests: 12,
-    completedTests: 458,
-    averageScore: 75
-  };
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setError(null);
+        
+        // Referencias a las colecciones
+        const usersRef = collection(db, 'users');
+        const testsRef = collection(db, 'testResults');
+        const questionsRef = collection(db, 'questions');
+
+        // Obtener datos básicos
+        const [usersSnapshot, testsSnapshot, questionsSnapshot] = await Promise.all([
+          getDocs(usersRef),
+          getDocs(testsRef),
+          getDocs(questionsRef)
+        ]);
+
+        // Calcular usuarios activos hoy
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayTimestamp = Timestamp.fromDate(today);
+        
+        const activeUsersQuery = query(
+          usersRef,
+          where('lastActive', '>=', todayTimestamp)
+        );
+        
+        // Calcular usuarios premium
+        const premiumUsersQuery = query(
+          usersRef,
+          where('planId', '!=', null)
+        );
+
+        const [activeUsersSnapshot, premiumUsersSnapshot] = await Promise.all([
+          getDocs(activeUsersQuery),
+          getDocs(premiumUsersQuery)
+        ]);
+
+        // Calcular estadísticas
+        const testScores = testsSnapshot.docs.map(doc => doc.data().score || 0);
+        const averageScore = testScores.length > 0 
+          ? Math.round(testScores.reduce((a, b) => a + b, 0) / testScores.length)
+          : 0;
+
+        setStats({
+          totalUsers: usersSnapshot.size,
+          activeTests: 0,
+          completedTests: testsSnapshot.size,
+          averageScore,
+          premiumUsers: premiumUsersSnapshot.size,
+          totalQuestions: questionsSnapshot.size,
+          todayActiveUsers: activeUsersSnapshot.size
+        });
+
+        // Obtener tests recientes
+        const recentTestsQuery = query(
+          testsRef,
+          orderBy('createdAt', 'desc'),
+          limit(5)
+        );
+        
+        const recentTestsSnapshot = await getDocs(recentTestsQuery);
+        
+        const testsData = await Promise.all(
+          recentTestsSnapshot.docs.map(async (testDoc) => {
+            const testData = testDoc.data();
+            if (!testData.userId) return null;
+            
+            try {
+              const userDoc = await getDoc(doc(usersRef, testData.userId));
+              const userData = userDoc.data();
+              
+              return {
+                id: testDoc.id,
+                userName: userData?.email || 'Usuario Anónimo',
+                testName: testData.testName || 'Test sin nombre',
+                score: testData.score || 0,
+                date: testData.createdAt?.toDate() || new Date()
+              };
+            } catch (error) {
+              console.error('Error fetching user data for test:', error);
+              return null;
+            }
+          })
+        );
+
+        setRecentTests(testsData.filter((test): test is RecentTest => test !== null));
+
+        // Obtener usuarios activos
+        const activeUsersListQuery = query(
+          usersRef,
+          orderBy('lastActive', 'desc'),
+          limit(5)
+        );
+        
+        const activeUsersListSnapshot = await getDocs(activeUsersListQuery);
+        
+        const usersData = await Promise.all(
+          activeUsersListSnapshot.docs.map(async (userDoc) => {
+            const userData = userDoc.data();
+            let planName = 'Plan Gratuito';
+            
+            if (userData.planId) {
+              try {
+                const planDoc = await getDoc(doc(db, 'plans', userData.planId));
+                if (planDoc.exists()) {
+                  planName = planDoc.data().name;
+                }
+              } catch (error) {
+                console.error('Error fetching plan data:', error);
+              }
+            }
+            
+            return {
+              email: userData.email || 'Usuario sin email',
+              lastActive: userData.lastActive?.toDate() || new Date(),
+              planName
+            };
+          })
+        );
+        
+        setActiveUsers(usersData);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        setError('Error al cargar los datos del dashboard');
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  const StatCard = ({ icon: Icon, title, value, description, color }: any) => (
+    <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="flex items-center">
+        <div className={`p-3 rounded-lg ${color}`}>
+          <Icon className="h-6 w-6 text-white" />
+        </div>
+        <div className="ml-4">
+          <h3 className="text-sm font-medium text-gray-500">{title}</h3>
+          <div className="mt-1 flex items-baseline">
+            <p className="text-2xl font-semibold text-gray-900">{value}</p>
+            {description && (
+              <p className="ml-2 text-sm text-gray-500">{description}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#91c26a]"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-lg font-medium text-gray-900">{error}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Panel de Administración</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Bienvenido, {userEmail}
-              </p>
-            </div>
-            <button
-              onClick={() => setActiveTab('create')}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-[#91c26a] to-[#6ea844] hover:shadow-lg transition-all duration-300"
-            >
-              <PlusCircle className="h-5 w-5 mr-2" />
-              Crear Test
-            </button>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Panel de Control</h2>
+        <button
+          onClick={() => navigate('/admin/tests/new')}
+          className="px-4 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors"
+        >
+          Crear Nuevo Test
+        </button>
+      </div>
+
+      {/* Estadísticas principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          icon={Users}
+          title="Usuarios Totales"
+          value={stats.totalUsers}
+          color="bg-blue-500"
+        />
+        <StatCard
+          icon={Target}
+          title="Tests Activos"
+          value={stats.activeTests}
+          color="bg-green-500"
+        />
+        <StatCard
+          icon={Clock}
+          title="Tests Completados"
+          value={stats.completedTests}
+          color="bg-purple-500"
+        />
+        <StatCard
+          icon={Award}
+          title="Puntuación Promedio"
+          value={`${stats.averageScore}%`}
+          color="bg-yellow-500"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Tests Recientes */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Tests Recientes</h3>
+          <div className="space-y-4">
+            {recentTests.map((test) => (
+              <div key={test.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{test.userName}</p>
+                  <p className="text-sm text-gray-500">{test.testName}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-semibold text-[#91c26a]">{test.score}%</p>
+                  <p className="text-sm text-gray-500">
+                    {test.date.toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Users className="h-6 w-6 text-[#91c26a]" />
+        {/* Usuarios Activos */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Usuarios Activos</h3>
+          <div className="space-y-4">
+            {activeUsers.map((user, index) => (
+              <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{user.email}</p>
+                  <p className="text-sm text-gray-500">{user.planName}</p>
                 </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Usuarios Totales</dt>
-                    <dd className="text-lg font-semibold text-gray-900">{stats.totalUsers}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <BookOpen className="h-6 w-6 text-[#91c26a]" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Tests Activos</dt>
-                    <dd className="text-lg font-semibold text-gray-900">{stats.activeTests}</dd>
-                  </dl>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">
+                    Último acceso: {user.lastActive.toLocaleDateString()}
+                  </p>
                 </div>
               </div>
-            </div>
-          </div>
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <BarChart3 className="h-6 w-6 text-[#91c26a]" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Tests Completados</dt>
-                    <dd className="text-lg font-semibold text-gray-900">{stats.completedTests}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Settings className="h-6 w-6 text-[#91c26a]" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Puntuación Promedio</dt>
-                    <dd className="text-lg font-semibold text-gray-900">{stats.averageScore}%</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* Main Content */}
-        <div className="bg-white shadow rounded-lg">
-          {/* Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`${
-                  activeTab === 'overview'
-                    ? 'border-[#91c26a] text-[#91c26a]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-              >
-                Vista General
-              </button>
-              <button
-                onClick={() => setActiveTab('users')}
-                className={`${
-                  activeTab === 'users'
-                    ? 'border-[#91c26a] text-[#91c26a]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-              >
-                Usuarios
-              </button>
-              <button
-                onClick={() => setActiveTab('tests')}
-                className={`${
-                  activeTab === 'tests'
-                    ? 'border-[#91c26a] text-[#91c26a]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-              >
-                Tests
-              </button>
-              <button
-                onClick={() => setActiveTab('create')}
-                className={`${
-                  activeTab === 'create'
-                    ? 'border-[#91c26a] text-[#91c26a]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-              >
-                Crear Test
-              </button>
-            </nav>
-          </div>
+      {/* Acciones Rápidas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <button
+          onClick={() => navigate('/admin/questions')}
+          className="p-6 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition-colors text-left"
+        >
+          <BookOpen className="h-8 w-8 text-[#91c26a] mb-4" />
+          <h3 className="text-lg font-medium text-gray-900">Gestionar Preguntas</h3>
+          <p className="text-sm text-gray-500 mt-2">
+            Crear y editar preguntas para los tests
+          </p>
+        </button>
 
-          {/* Tab Content */}
-          <div className="p-6">
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Resumen de Actividad</h3>
-                <p className="text-gray-500">
-                  Panel en desarrollo. Aquí se mostrarán gráficos y estadísticas detalladas.
-                </p>
-              </div>
-            )}
+        <button
+          onClick={() => navigate('/admin/plans')}
+          className="p-6 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition-colors text-left"
+        >
+          <TrendingUp className="h-8 w-8 text-[#91c26a] mb-4" />
+          <h3 className="text-lg font-medium text-gray-900">Gestionar Planes</h3>
+          <p className="text-sm text-gray-500 mt-2">
+            Administrar planes y suscripciones
+          </p>
+        </button>
 
-            {activeTab === 'users' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Gestión de Usuarios</h3>
-                <p className="text-gray-500">
-                  Panel en desarrollo. Aquí se mostrará la lista de usuarios y sus detalles.
-                </p>
-              </div>
-            )}
-
-            {activeTab === 'tests' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Tests Disponibles</h3>
-                <p className="text-gray-500">
-                  Panel en desarrollo. Aquí se mostrarán todos los tests creados y sus estadísticas.
-                </p>
-              </div>
-            )}
-
-            {activeTab === 'create' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Crear Nuevo Test</h3>
-                {/* Aquí iría el formulario de creación de test */}
-                <form className="space-y-6">
-                  <div>
-                    <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                      Título del Test
-                    </label>
-                    <input
-                      type="text"
-                      name="title"
-                      id="title"
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a] sm:text-sm"
-                      placeholder="Ej: Test de Aptitud Verbal"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                      Descripción
-                    </label>
-                    <textarea
-                      id="description"
-                      name="description"
-                      rows={3}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a] sm:text-sm"
-                      placeholder="Describe el propósito y contenido del test"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                    <div>
-                      <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-                        Categoría
-                      </label>
-                      <select
-                        id="category"
-                        name="category"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a] sm:text-sm"
-                      >
-                        <option>Psicotécnico</option>
-                        <option>Aptitud Verbal</option>
-                        <option>Razonamiento Lógico</option>
-                        <option>Matemáticas</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label htmlFor="difficulty" className="block text-sm font-medium text-gray-700">
-                        Dificultad
-                      </label>
-                      <select
-                        id="difficulty"
-                        name="difficulty"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a] sm:text-sm"
-                      >
-                        <option>Fácil</option>
-                        <option>Medio</option>
-                        <option>Difícil</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label htmlFor="plan" className="block text-sm font-medium text-gray-700">
-                      Plan Requerido
-                    </label>
-                    <select
-                      id="plan"
-                      name="plan"
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a] sm:text-sm"
-                    >
-                      <option value="basic">Básico</option>
-                      <option value="premium">Premium</option>
-                      <option value="annual">Anual</option>
-                    </select>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-[#91c26a] to-[#6ea844] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#91c26a] transition-all duration-300"
-                    >
-                      Crear Test
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-          </div>
-        </div>
+        <button
+          onClick={() => navigate('/admin/reports')}
+          className="p-6 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition-colors text-left"
+        >
+          <AlertCircle className="h-8 w-8 text-[#91c26a] mb-4" />
+          <h3 className="text-lg font-medium text-gray-900">Reportes</h3>
+          <p className="text-sm text-gray-500 mt-2">
+            Ver estadísticas y análisis detallados
+          </p>
+        </button>
       </div>
     </div>
   );

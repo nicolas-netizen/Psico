@@ -1,20 +1,26 @@
 import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
+import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAzqhfR0oaRhUKneV_ixCWqORvW31Ybfbk",
-  authDomain: "psino-91747.firebaseapp.com",
-  projectId: "psino-91747",
-  storageBucket: "psino-91747.appspot.com",
-  messagingSenderId: "141588048823",
-  appId: "1:141588048823:web:de9dc0da762d0a0e2a5632",
-  measurementId: "G-RPR0346S55"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase
-export const app = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
+
+// Initialize Firebase services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
+export const analytics = getAnalytics(app);
 
-setPersistence(auth, browserLocalPersistence);
+export default app;

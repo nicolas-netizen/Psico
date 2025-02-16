@@ -605,6 +605,7 @@ export const createInitialQuestions = async () => {
     
     if (querySnapshot.empty) {
       const initialQuestions = [
+        // Bloque de Psicología Cognitiva
         {
           type: 'text',
           block: "Psicología Cognitiva",
@@ -621,6 +622,21 @@ export const createInitialQuestions = async () => {
         },
         {
           type: 'text',
+          block: "Psicología Cognitiva",
+          question: "¿Qué es la atención selectiva?",
+          options: [
+            "La capacidad de recordar información",
+            "La habilidad de hacer varias cosas a la vez",
+            "La capacidad de enfocarse en estímulos específicos",
+            "El proceso de almacenar información"
+          ],
+          correctAnswer: 2,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        // Bloque de Desarrollo
+        {
+          type: 'text',
           block: "Desarrollo",
           question: "¿Qué teoría propuso Jean Piaget?",
           options: [
@@ -633,6 +649,21 @@ export const createInitialQuestions = async () => {
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now()
         },
+        {
+          type: 'text',
+          block: "Desarrollo",
+          question: "¿Cuál es la etapa del desarrollo según Piaget donde aparece el pensamiento simbólico?",
+          options: [
+            "Sensoriomotora",
+            "Preoperacional",
+            "Operaciones concretas",
+            "Operaciones formales"
+          ],
+          correctAnswer: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        // Bloque de Terapia
         {
           type: 'text',
           block: "Terapia",
@@ -649,6 +680,21 @@ export const createInitialQuestions = async () => {
         },
         {
           type: 'text',
+          block: "Terapia",
+          question: "¿Qué técnica es característica de la terapia cognitivo-conductual?",
+          options: [
+            "Libre asociación",
+            "Reestructuración cognitiva",
+            "Interpretación de sueños",
+            "Hipnosis"
+          ],
+          correctAnswer: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        // Bloque de Memoria
+        {
+          type: 'text',
           block: "Memoria",
           question: "¿Qué es la memoria de trabajo?",
           options: [
@@ -658,6 +704,78 @@ export const createInitialQuestions = async () => {
             "Memoria sensorial"
           ],
           correctAnswer: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        {
+          type: 'text',
+          block: "Memoria",
+          question: "¿Cuál es la capacidad típica de la memoria de trabajo en elementos?",
+          options: [
+            "3-5 elementos",
+            "7±2 elementos",
+            "10-12 elementos",
+            "15-20 elementos"
+          ],
+          correctAnswer: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        // Bloque de Neuropsicología
+        {
+          type: 'text',
+          block: "Neuropsicología",
+          question: "¿Qué función principal tiene el hipocampo?",
+          options: [
+            "Control del equilibrio",
+            "Formación de memorias",
+            "Regulación emocional",
+            "Control motor"
+          ],
+          correctAnswer: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        {
+          type: 'text',
+          block: "Neuropsicología",
+          question: "¿Qué área cerebral está principalmente asociada con el lenguaje expresivo?",
+          options: [
+            "Área de Broca",
+            "Área de Wernicke",
+            "Corteza visual",
+            "Corteza motora"
+          ],
+          correctAnswer: 0,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        // Bloque de Psicopatología
+        {
+          type: 'text',
+          block: "Psicopatología",
+          question: "¿Cuál es un síntoma característico de la depresión mayor?",
+          options: [
+            "Euforia",
+            "Anhedonia",
+            "Grandiosidad",
+            "Delirios"
+          ],
+          correctAnswer: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        {
+          type: 'text',
+          block: "Psicopatología",
+          question: "¿Qué trastorno se caracteriza por ataques de pánico recurrentes?",
+          options: [
+            "Trastorno depresivo",
+            "Trastorno de ansiedad generalizada",
+            "Trastorno de pánico",
+            "Fobia social"
+          ],
+          correctAnswer: 2,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now()
         }

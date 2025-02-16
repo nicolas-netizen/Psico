@@ -430,7 +430,9 @@ const TestManager: React.FC = () => {
                 </div>
                 <div className="flex items-center">
                   <Image className="w-4 h-4 mr-1" />
-                  {test.blocks[0].questions.length} preguntas
+                  {test.blocks && test.blocks.length > 0 && test.blocks[0].questions 
+                    ? test.blocks[0].questions.length 
+                    : 0} preguntas
                 </div>
               </div>
               <div className="mt-2">

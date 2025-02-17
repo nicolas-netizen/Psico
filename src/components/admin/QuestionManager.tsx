@@ -1,524 +1,441 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, query, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/firebaseConfig';
-import { toast } from 'react-toastify';
-import { Plus, Edit2, Trash2, Save, X, Image as ImageIcon, Loader } from 'lucide-react';
-import { Question, TextQuestion, MemoryQuestion, DistractionQuestion, SequenceQuestion } from '../../services/firestore';
+import { toast } from 'react-hot-toast';
+import { Block, getBlocksByType } from '../../firebase/blocks';
 
-interface MemoryQuestionForm {
-  type: 'memory';
-  images: string[];
-  correctImageIndex: number;
-  distractionQuestion: {
-    question: string;
-    options: string[];
-    correctAnswer: number;
-  };
-  followUpQuestion: {
-    question: string;
-    options: string[];
-    correctAnswer: number;
-  };
+interface Question {
+  id: string;
+  type: 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia';
+  blockId?: string;
+  text?: string;
+  options?: string[];
+  correctAnswer?: number;
+  images?: string[];
+  correctImageIndex?: number;
+  sequence?: number[];
+  isPublic: boolean;
 }
 
-const QuestionManager: React.FC = () => {
+const QuestionManager = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [blocks, setBlocks] = useState<string[]>([]);
-  const [selectedType, setSelectedType] = useState<'text' | 'memory' | 'distraction' | 'sequence'>('text');
-  const [isEditing, setIsEditing] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState<{ [key: number]: boolean }>({});
-  const [currentQuestion, setCurrentQuestion] = useState<Partial<Question>>({
-    type: 'text',
-    block: '',
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedType, setSelectedType] = useState<Question['type']>('Texto');
+  const [selectedBlock, setSelectedBlock] = useState<string>('');
+  const [newQuestion, setNewQuestion] = useState<Omit<Question, 'id'>>({
+    type: 'Texto',
+    text: '',
+    options: ['', '', '', ''],
+    correctAnswer: 0,
+    isPublic: true
   });
-  const [images, setImages] = useState<string[]>([]);
-  const [correctImageIndex, setCorrectImageIndex] = useState<number>(0);
-  const [distractionQuestion, setDistractionQuestion] = useState('');
-  const [distractionOptions, setDistractionOptions] = useState<string[]>(['']);
-  const [distractionCorrectAnswer, setDistractionCorrectAnswer] = useState<number>(0);
-  const [followUpQuestion, setFollowUpQuestion] = useState('');
-  const [followUpOptions, setFollowUpOptions] = useState<string[]>(['']);
-  const [followUpCorrectAnswer, setFollowUpCorrectAnswer] = useState<number>(0);
 
   useEffect(() => {
     loadQuestions();
   }, []);
 
+  useEffect(() => {
+    if (selectedType) {
+      loadBlocks(selectedType);
+    }
+  }, [selectedType]);
+
+  const loadBlocks = async (type: Question['type']) => {
+    try {
+      const loadedBlocks = await getBlocksByType(type);
+      setBlocks(loadedBlocks);
+      if (loadedBlocks.length > 0) {
+        setSelectedBlock(loadedBlocks[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading blocks:', error);
+      toast.error('Error al cargar los bloques');
+    }
+  };
+
   const loadQuestions = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, 'questions'));
-      const loadedQuestions = querySnapshot.docs.map(doc => ({
+      const questionsQuery = query(collection(db, 'questions'));
+      const snapshot = await getDocs(questionsQuery);
+      const loadedQuestions = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Question[];
       setQuestions(loadedQuestions);
-      
-      // Extraer bloques únicos
-      const uniqueBlocks = Array.from(new Set(loadedQuestions.map(q => q.block)));
-      setBlocks(uniqueBlocks);
     } catch (error) {
       console.error('Error loading questions:', error);
       toast.error('Error al cargar las preguntas');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setCurrentQuestion(prev => ({
+  const handleAddQuestion = async () => {
+    try {
+      // Validar la pregunta según su tipo
+      if (newQuestion.type === 'Texto' || newQuestion.type === 'Distracción') {
+        if (!newQuestion.text || newQuestion.text.trim() === '') {
+          toast.error('La pregunta debe tener un texto');
+          return;
+        }
+        if (!newQuestion.options || newQuestion.options.some(opt => opt.trim() === '')) {
+          toast.error('Todas las opciones deben estar completas');
+          return;
+        }
+      } else if (newQuestion.type === 'Memoria') {
+        if (!newQuestion.images || newQuestion.images.length < 2) {
+          toast.error('Debe haber al menos 2 imágenes');
+          return;
+        }
+      } else if (newQuestion.type === 'Secuencia') {
+        if (!newQuestion.sequence || newQuestion.sequence.length < 3) {
+          toast.error('La secuencia debe tener al menos 3 números');
+          return;
+        }
+      }
+
+      // Añadir el blockId a la pregunta
+      const questionData = {
+        ...newQuestion,
+        blockId: selectedBlock,
+        createdAt: new Date()
+      };
+
+      await addDoc(collection(db, 'questions'), questionData);
+
+      toast.success('Pregunta creada con éxito');
+      loadQuestions();
+
+      // Resetear el formulario
+      setNewQuestion({
+        type: selectedType,
+        text: '',
+        options: ['', '', '', ''],
+        correctAnswer: 0,
+        isPublic: true
+      });
+    } catch (error) {
+      console.error('Error adding question:', error);
+      toast.error('Error al crear la pregunta');
+    }
+  };
+
+  const handleDeleteQuestion = async (questionId: string) => {
+    try {
+      await deleteDoc(doc(db, 'questions', questionId));
+      toast.success('Pregunta eliminada con éxito');
+      loadQuestions();
+    } catch (error) {
+      console.error('Error deleting question:', error);
+      toast.error('Error al eliminar la pregunta');
+    }
+  };
+
+  const handleTypeChange = (type: Question['type']) => {
+    setSelectedType(type);
+    setNewQuestion(prev => ({
       ...prev,
-      [name]: value
+      type,
+      text: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0,
+      images: [],
+      correctImageIndex: 0,
+      sequence: []
     }));
   };
 
-  const handleArrayInputChange = (index: number, value: string, field: 'options' | 'images' | 'sequence') => {
-    setCurrentQuestion(prev => {
-      const newArray = [...(prev[field] || [])];
-      newArray[index] = value;
-      return {
-        ...prev,
-        [field]: newArray
-      };
-    });
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-[#91c26a]"></div>
+      </div>
+    );
+  }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 className="text-xl font-semibold mb-4">Crear Nueva Pregunta</h2>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tipo de Pregunta
+            </label>
+            <select
+              value={selectedType}
+              onChange={(e) => handleTypeChange(e.target.value as Question['type'])}
+              className="w-full p-2 border rounded-lg"
+            >
+              <option value="Texto">Texto</option>
+              <option value="Memoria">Memoria</option>
+              <option value="Distracción">Distracción</option>
+              <option value="Secuencia">Secuencia</option>
+            </select>
+          </div>
 
-    setUploadingImages(prev => ({ ...prev, [index]: true }));
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Bloque
+            </label>
+            <select
+              value={selectedBlock}
+              onChange={(e) => setSelectedBlock(e.target.value)}
+              className="w-full p-2 border rounded-lg"
+            >
+              {blocks.map(block => (
+                <option key={block.id} value={block.id}>
+                  {block.title}
+                </option>
+              ))}
+            </select>
+          </div>
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', 'psico_upload');
+          {(selectedType === 'Texto' || selectedType === 'Distracción') && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Pregunta
+                </label>
+                <input
+                  type="text"
+                  value={newQuestion.text}
+                  onChange={(e) => setNewQuestion(prev => ({
+                    ...prev,
+                    text: e.target.value
+                  }))}
+                  className="w-full p-2 border rounded-lg"
+                  placeholder="Escribe la pregunta..."
+                />
+              </div>
 
-    try {
-      const response = await fetch(
-        'https://api.cloudinary.com/v1_1/db6xthbpp/image/upload',
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
-
-      const data = await response.json();
-      if (data.secure_url) {
-        handleArrayInputChange(index, data.secure_url, 'images');
-        toast.success('Imagen subida exitosamente');
-      } else {
-        throw new Error('No se recibió la URL de la imagen');
-      }
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al subir la imagen');
-    } finally {
-      setUploadingImages(prev => ({ ...prev, [index]: false }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const questionData = {
-        ...currentQuestion,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      };
-
-      if (isEditing && currentQuestion.id) {
-        await updateDoc(doc(db, 'questions', currentQuestion.id), questionData);
-        toast.success('Pregunta actualizada exitosamente');
-      } else {
-        await addDoc(collection(db, 'questions'), questionData);
-        toast.success('Pregunta creada exitosamente');
-      }
-
-      setIsEditing(false);
-      setCurrentQuestion({ type: 'text', block: '' });
-      loadQuestions();
-    } catch (error) {
-      console.error('Error saving question:', error);
-      toast.error('Error al guardar la pregunta');
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar esta pregunta?')) {
-      try {
-        await deleteDoc(doc(db, 'questions', id));
-        toast.success('Pregunta eliminada exitosamente');
-        loadQuestions();
-      } catch (error) {
-        console.error('Error deleting question:', error);
-        toast.error('Error al eliminar la pregunta');
-      }
-    }
-  };
-
-  const handleMemoryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    // Solo permitir seleccionar 4 imágenes
-    if (files.length !== 4) {
-      toast.error('Por favor, selecciona exactamente 4 imágenes');
-      return;
-    }
-
-    try {
-      const uploadedUrls: string[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const formData = new FormData();
-        formData.append('file', files[i]);
-        formData.append('upload_preset', 'psico_upload');
-
-        const response = await fetch(
-          'https://api.cloudinary.com/v1_1/db6xthbpp/image/upload',
-          {
-            method: 'POST',
-            body: formData,
-          }
-        );
-
-        const data = await response.json();
-        uploadedUrls.push(data.secure_url);
-      }
-
-      setImages(uploadedUrls);
-      toast.success('Imágenes subidas correctamente');
-    } catch (error) {
-      console.error('Error uploading images:', error);
-      toast.error('Error al subir las imágenes');
-    }
-  };
-
-  const handleDistractionOptionChange = (index: number, value: string) => {
-    const newOptions = [...distractionOptions];
-    newOptions[index] = value;
-    setDistractionOptions(newOptions);
-  };
-
-  const handleFollowUpOptionChange = (index: number, value: string) => {
-    const newOptions = [...followUpOptions];
-    newOptions[index] = value;
-    setFollowUpOptions(newOptions);
-  };
-
-  const addDistractionOption = () => {
-    setDistractionOptions([...distractionOptions, '']);
-  };
-
-  const addFollowUpOption = () => {
-    setFollowUpOptions([...followUpOptions, '']);
-  };
-
-  const renderQuestionForm = () => {
-    switch (selectedType) {
-      case 'memory':
-        return (
-          <>
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Imágenes</label>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleMemoryImageUpload}
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#91c26a] file:text-white hover:file:bg-[#82b35b]"
-              />
-              {images.length > 0 && (
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  {images.map((url, index) => (
-                    <div key={index} className="relative">
-                      <img
-                        src={url}
-                        alt={`Imagen ${index + 1}`}
-                        className={`w-full h-48 object-cover rounded-lg cursor-pointer ${
-                          correctImageIndex === index ? 'ring-4 ring-[#91c26a]' : ''
-                        }`}
-                        onClick={() => setCorrectImageIndex(index)}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Opciones
+                </label>
+                <div className="space-y-2">
+                  {newQuestion.options?.map((option, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={option}
+                        onChange={(e) => {
+                          const newOptions = [...(newQuestion.options || [])];
+                          newOptions[index] = e.target.value;
+                          setNewQuestion(prev => ({
+                            ...prev,
+                            options: newOptions
+                          }));
+                        }}
+                        className="flex-1 p-2 border rounded-lg"
+                        placeholder={`Opción ${index + 1}`}
                       />
-                      <div className="absolute top-2 left-2 bg-white rounded-full px-2 py-1 text-sm font-medium">
-                        {index + 1}
-                      </div>
+                      <input
+                        type="radio"
+                        name="correctAnswer"
+                        checked={newQuestion.correctAnswer === index}
+                        onChange={() => setNewQuestion(prev => ({
+                          ...prev,
+                          correctAnswer: index
+                        }))}
+                      />
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Pregunta de Distracción
-                </label>
-                <input
-                  type="text"
-                  value={distractionQuestion}
-                  onChange={(e) => setDistractionQuestion(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-                  placeholder="Ej: ¿Cuánto es 2 + 2?"
-                />
               </div>
+            </>
+          )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Opciones de Distracción
-                </label>
-                {distractionOptions.map((option, index) => (
-                  <div key={index} className="flex items-center space-x-2 mb-2">
+          {selectedType === 'Memoria' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                URLs de Imágenes
+              </label>
+              <div className="space-y-2">
+                {(newQuestion.images || ['']).map((url, index) => (
+                  <div key={index} className="flex items-center space-x-2">
                     <input
                       type="text"
-                      value={option}
-                      onChange={(e) => handleDistractionOptionChange(index, e.target.value)}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-                      placeholder={`Opción ${index + 1}`}
+                      value={url}
+                      onChange={(e) => {
+                        const newImages = [...(newQuestion.images || [])];
+                        newImages[index] = e.target.value;
+                        setNewQuestion(prev => ({
+                          ...prev,
+                          images: newImages
+                        }));
+                      }}
+                      className="flex-1 p-2 border rounded-lg"
+                      placeholder="URL de la imagen..."
                     />
                     <input
                       type="radio"
-                      name="distractionCorrect"
-                      checked={distractionCorrectAnswer === index}
-                      onChange={() => setDistractionCorrectAnswer(index)}
-                      className="h-4 w-4 text-[#91c26a] focus:ring-[#91c26a]"
+                      name="correctImageIndex"
+                      checked={newQuestion.correctImageIndex === index}
+                      onChange={() => setNewQuestion(prev => ({
+                        ...prev,
+                        correctImageIndex: index
+                      }))}
                     />
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addDistractionOption}
-                  className="mt-2 text-sm text-[#91c26a] hover:text-[#82b35b]"
-                >
-                  + Agregar opción
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Pregunta de Seguimiento
-                </label>
-                <input
-                  type="text"
-                  value={followUpQuestion}
-                  onChange={(e) => setFollowUpQuestion(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-                  placeholder="Ej: ¿Cuál era la imagen correcta?"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Opciones de Seguimiento
-                </label>
-                {followUpOptions.map((option, index) => (
-                  <div key={index} className="flex items-center space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={option}
-                      onChange={(e) => handleFollowUpOptionChange(index, e.target.value)}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-                      placeholder={`Opción ${index + 1}`}
-                    />
-                    <input
-                      type="radio"
-                      name="followUpCorrect"
-                      checked={followUpCorrectAnswer === index}
-                      onChange={() => setFollowUpCorrectAnswer(index)}
-                      className="h-4 w-4 text-[#91c26a] focus:ring-[#91c26a]"
-                    />
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addFollowUpOption}
-                  className="mt-2 text-sm text-[#91c26a] hover:text-[#82b35b]"
-                >
-                  + Agregar opción
-                </button>
-              </div>
-            </div>
-          </>
-        );
-      case 'distraction':
-        return (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700">Contenido inicial</label>
-              <textarea
-                name="initialContent"
-                value={(currentQuestion as DistractionQuestion)?.initialContent || ''}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700">Tiempo de distracción (segundos)</label>
-              <input
-                type="number"
-                name="distractionTime"
-                value={(currentQuestion as DistractionQuestion)?.distractionTime || ''}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700">Contenido de distracción</label>
-              <textarea
-                name="distractionContent"
-                value={(currentQuestion as DistractionQuestion)?.distractionContent || ''}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-              />
-            </div>
-          </>
-        );
-      // Agrega más casos según sea necesario
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Gestión de Preguntas</h2>
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Tipo de Pregunta</label>
-              <select
-                name="type"
-                value={selectedType}
-                onChange={(e) => {
-                  setSelectedType(e.target.value as any);
-                  setCurrentQuestion(prev => ({ ...prev, type: e.target.value as any }));
-                }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-              >
-                <option value="text">Texto</option>
-                <option value="memory">Memoria</option>
-                <option value="distraction">Distracción</option>
-                <option value="sequence">Secuencia</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Bloque</label>
-              <input
-                type="text"
-                name="block"
-                value={currentQuestion.block}
-                onChange={handleInputChange}
-                list="blocks"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-              />
-              <datalist id="blocks">
-                {blocks.map((block) => (
-                  <option key={block} value={block} />
-                ))}
-              </datalist>
-            </div>
-          </div>
-
-          {renderQuestionForm()}
-
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700">Pregunta</label>
-            <textarea
-              name="question"
-              value={currentQuestion.question || ''}
-              onChange={handleInputChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700">Opciones</label>
-            <div className="space-y-2">
-              {[0, 1, 2, 3].map((index) => (
-                <input
-                  key={index}
-                  type="text"
-                  value={currentQuestion.options?.[index] || ''}
-                  onChange={(e) => handleArrayInputChange(index, e.target.value, 'options')}
-                  placeholder={`Opción ${index + 1}`}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700">Respuesta Correcta</label>
-            <input
-              type="text"
-              name="correctAnswer"
-              value={currentQuestion.correctAnswer || ''}
-              onChange={handleInputChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a]"
-            />
-          </div>
-
-          <div className="flex justify-end space-x-2">
-            {isEditing && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEditing(false);
-                  setCurrentQuestion({ type: 'text', block: '' });
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-            )}
-            <button
-              type="submit"
-              className="px-4 py-2 bg-[#91c26a] text-white rounded-md hover:bg-[#82b35b]"
-            >
-              {isEditing ? 'Actualizar' : 'Crear'} Pregunta
-            </button>
-          </div>
-        </form>
-
-        <div className="mt-8">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Preguntas Existentes</h3>
-          <div className="space-y-4">
-            {questions.map((question) => (
-              <div
-                key={question.id}
-                className="border rounded-lg p-4 hover:bg-gray-50"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="inline-block px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full mb-2">
-                      {question.type} - {question.block}
-                    </span>
-                    <p className="text-gray-900">{question.question}</p>
-                  </div>
-                  <div className="flex space-x-2">
                     <button
                       onClick={() => {
-                        setIsEditing(true);
-                        setCurrentQuestion(question);
-                        setSelectedType(question.type);
+                        const newImages = [...(newQuestion.images || [])];
+                        if (newImages.length > 2) {
+                          newImages.splice(index, 1);
+                        }
+                        setNewQuestion(prev => ({
+                          ...prev,
+                          images: newImages
+                        }));
                       }}
-                      className="p-1 text-gray-400 hover:text-gray-500"
+                      className="px-2 py-1 bg-red-600 text-white rounded"
+                      disabled={newQuestion.images?.length <= 2}
                     >
-                      <Edit2 className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => question.id && handleDelete(question.id)}
-                      className="p-1 text-gray-400 hover:text-red-500"
-                    >
-                      <Trash2 className="h-5 w-5" />
+                      -
                     </button>
                   </div>
+                ))}
+                <button
+                  onClick={() => setNewQuestion(prev => ({
+                    ...prev,
+                    images: [...(prev.images || []), '']
+                  }))}
+                  className="px-4 py-2 bg-[#91c26a] text-white rounded-lg"
+                >
+                  Añadir Imagen
+                </button>
+              </div>
+            </div>
+          )}
+
+          {selectedType === 'Secuencia' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Secuencia de Números
+              </label>
+              <div className="flex items-center space-x-2 mb-4">
+                <input
+                  type="text"
+                  value={newQuestion.sequence?.join(', ') || ''}
+                  onChange={(e) => {
+                    const numbers = e.target.value
+                      .split(',')
+                      .map(n => parseInt(n.trim()))
+                      .filter(n => !isNaN(n));
+                    setNewQuestion(prev => ({
+                      ...prev,
+                      sequence: numbers
+                    }));
+                  }}
+                  className="flex-1 p-2 border rounded-lg"
+                  placeholder="Ejemplo: 1, 3, 5, 7"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Opciones de Respuesta
+                </label>
+                <div className="space-y-2">
+                  {newQuestion.options?.map((option, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={option}
+                        onChange={(e) => {
+                          const newOptions = [...(newQuestion.options || [])];
+                          newOptions[index] = e.target.value;
+                          setNewQuestion(prev => ({
+                            ...prev,
+                            options: newOptions
+                          }));
+                        }}
+                        className="flex-1 p-2 border rounded-lg"
+                        placeholder={`Opción ${index + 1}`}
+                      />
+                      <input
+                        type="radio"
+                        name="correctAnswer"
+                        checked={newQuestion.correctAnswer === index}
+                        onChange={() => setNewQuestion(prev => ({
+                          ...prev,
+                          correctAnswer: index
+                        }))}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
+
+          <button
+            onClick={handleAddQuestion}
+            className="w-full px-4 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors"
+          >
+            Crear Pregunta
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-xl font-semibold mb-4">Preguntas Existentes</h2>
+        
+        <div className="space-y-4">
+          {questions.map(question => (
+            <div
+              key={question.id}
+              className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex space-x-2 mb-2">
+                    <span className="inline-block px-2 py-1 text-sm bg-gray-200 rounded">
+                      {question.type}
+                    </span>
+                    {question.blockId && blocks.find(b => b.id === question.blockId) && (
+                      <span className="inline-block px-2 py-1 text-sm bg-blue-100 text-blue-800 rounded">
+                        {blocks.find(b => b.id === question.blockId)?.title}
+                      </span>
+                    )}
+                  </div>
+                  {question.text && (
+                    <p className="font-medium">{question.text}</p>
+                  )}
+                  {question.options && (
+                    <ul className="mt-2 space-y-1">
+                      {question.options.map((option, index) => (
+                        <li
+                          key={index}
+                          className={`text-sm ${
+                            index === question.correctAnswer
+                              ? 'text-green-600 font-medium'
+                              : 'text-gray-600'
+                          }`}
+                        >
+                          {option}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {question.sequence && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      Secuencia: {question.sequence.join(', ')}
+                    </p>
+                  )}
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleDeleteQuestion(question.id)}
+                    className="p-1 text-red-600 hover:bg-red-50 rounded"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

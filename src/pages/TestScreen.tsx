@@ -1,179 +1,203 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, query, where, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
+import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
-import { Timer, ArrowRight, CheckCircle, XCircle } from 'lucide-react';
+import { Test, BlockConfig, Question, createTemporaryTest, loadBlockQuestions, updateTestQuestions } from '../firebase/tests';
 
-interface Question {
-  type: string;
-  images?: string[];
-  correctImageIndex?: number;
-  distractionQuestion?: {
-    question: string;
-    options: string[];
-    correctAnswer: number;
-  };
+interface TestSession {
+  id?: string;
+  testId: string;
+  userId: string;
+  startedAt: Date;
+  currentBlock: number;
+  currentQuestion: number;
+  answers: any[];
+  completed: boolean;
 }
 
-interface TestBlock {
-  type: string;
-  quantity: number;
-  questions: Question[];
-}
-
-interface Test {
-  id: string;
-  title: string;
-  description: string;
-  timeLimit: number;
-  blocks: TestBlock[];
-  isPublic: boolean;
-}
-
-const TestScreen: React.FC = () => {
+const TestScreen = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [test, setTest] = useState<Test | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [showingImages, setShowingImages] = useState(true);
-  const [showingDistraction, setShowingDistraction] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(0);
-  const [answers, setAnswers] = useState<any[]>([]);
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [isCorrect, setIsCorrect] = useState(false);
+  const [session, setSession] = useState<TestSession | null>(null);
 
   useEffect(() => {
-    const fetchTest = async () => {
+    const initializeTest = async () => {
       try {
-        if (!testId) {
-          // Si no hay testId, obtener un test público aleatorio
-          const testsRef = collection(db, 'tests');
-          const q = query(testsRef, where('isPublic', '==', true));
-          const querySnapshot = await getDocs(q);
-          
-          console.log('Fetching public tests...');
-          const publicTests = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as Test[];
-          
-          console.log('Public tests found:', publicTests.length);
+        console.log('Initializing test...');
+        if (!currentUser) {
+          toast.error('Debes iniciar sesión para realizar el test');
+          navigate('/login');
+          return;
+        }
 
-          if (publicTests.length > 0) {
-            const randomTest = publicTests[Math.floor(Math.random() * publicTests.length)];
-            console.log('Selected test:', randomTest);
-            setTest(randomTest);
-            setTimeLeft(randomTest.timeLimit * 60);
-          } else {
-            console.log('No public tests available');
-            toast.error('No hay tests públicos disponibles');
-            navigate('/dashboard');
-          }
-        } else {
-          console.log('Fetching specific test:', testId);
+        let currentTest: Test;
+        if (testId) {
+          console.log('Fetching test:', testId);
           const testDoc = await getDoc(doc(db, 'tests', testId));
-          if (testDoc.exists()) {
-            const testData = { id: testDoc.id, ...testDoc.data() } as Test;
-            console.log('Test found:', testData);
-            setTest(testData);
-            setTimeLeft(testData.timeLimit * 60);
-          } else {
-            console.log('Test not found');
+          
+          if (!testDoc.exists()) {
             toast.error('Test no encontrado');
             navigate('/dashboard');
+            return;
           }
+
+          const testData = testDoc.data();
+          console.log('Test data:', testData);
+          
+          if (!testData.isTemporary) {
+            console.log('Creating temporary copy of test');
+            currentTest = await createTemporaryTest(testId, currentUser.uid);
+          } else {
+            console.log('Using existing temporary test');
+            currentTest = { id: testDoc.id, ...testData } as Test;
+          }
+        } else {
+          console.log('No testId provided, looking for public tests');
+          // Buscar tests públicos
+          const testsQuery = query(
+            collection(db, 'tests'),
+            where('isPublic', '==', true),
+            where('isTemporary', '==', false)
+          );
+          const testsSnapshot = await getDocs(testsQuery);
+          
+          if (testsSnapshot.empty) {
+            toast.error('No hay tests disponibles');
+            navigate('/dashboard');
+            return;
+          }
+
+          console.log(`Found ${testsSnapshot.size} public tests`);
+          // Seleccionar un test aleatorio y crear una copia temporal
+          const templates = testsSnapshot.docs;
+          const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+          console.log('Selected random template:', randomTemplate.id);
+          currentTest = await createTemporaryTest(randomTemplate.id, currentUser.uid);
         }
+
+        console.log('Setting test state:', currentTest);
+        setTest(currentTest);
+
+        // Crear sesión para el test
+        const newSession: Omit<TestSession, 'id'> = {
+          testId: currentTest.id,
+          userId: currentUser.uid,
+          startedAt: new Date(),
+          currentBlock: 0,
+          currentQuestion: 0,
+          answers: [],
+          completed: false
+        };
+
+        console.log('Creating test session:', newSession);
+        const sessionRef = await addDoc(collection(db, 'testSessions'), newSession);
+        setSession({ id: sessionRef.id, ...newSession });
+
+        // Cargar las preguntas para el primer bloque
+        console.log('Loading questions for first block');
+        await loadQuestionsForBlock(0, currentTest);
+        
+        console.log('Test initialization complete');
+        setLoading(false);
       } catch (error) {
-        console.error('Error fetching test:', error);
-        toast.error('Error al cargar el test');
-      } finally {
+        console.error('Error initializing test:', error);
+        toast.error('Error al inicializar el test');
+        navigate('/dashboard');
         setLoading(false);
       }
     };
 
-    fetchTest();
-  }, [testId, navigate]);
+    initializeTest();
+  }, [testId, navigate, currentUser]);
 
-  useEffect(() => {
-    if (timeLeft > 0) {
-      const timer = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            handleTestComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      return () => clearInterval(timer);
-    }
-  }, [timeLeft]);
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
-
-  const getCurrentQuestion = () => {
-    if (!test) return null;
-    return test.blocks[currentBlockIndex]?.questions[currentQuestionIndex];
-  };
-
-  const handleAnswerSelect = (answerIndex: number) => {
-    const currentQuestion = getCurrentQuestion();
-    if (!currentQuestion || selectedAnswer !== null) return;
-
-    setSelectedAnswer(answerIndex);
-    const isAnswerCorrect = answerIndex === currentQuestion.correctImageIndex;
-    setIsCorrect(isAnswerCorrect);
-    setShowFeedback(true);
-
-    // Guardar la respuesta
-    setAnswers(prev => [...prev, {
-      blockIndex: currentBlockIndex,
-      questionIndex: currentQuestionIndex,
-      selectedAnswer: answerIndex,
-      correct: isAnswerCorrect
-    }]);
-
-    // Esperar y avanzar
-    setTimeout(() => {
-      setShowFeedback(false);
-      if (currentQuestionIndex < test!.blocks[currentBlockIndex].questions.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
-      } else if (currentBlockIndex < test!.blocks.length - 1) {
-        setCurrentBlockIndex(prev => prev + 1);
-        setCurrentQuestionIndex(0);
-      } else {
-        handleTestComplete();
-        return;
+  const loadQuestionsForBlock = async (blockIndex: number, currentTest: Test) => {
+    try {
+      const block = currentTest.blocks[blockIndex];
+      if (!block) {
+        console.error('Block not found at index:', blockIndex);
+        toast.error('Error: Bloque no encontrado');
+        return [];
       }
 
-      // Resetear estados
-      setShowingImages(true);
-      setShowingDistraction(false);
-      setSelectedAnswer(null);
-    }, 2000);
+      console.log('Loading questions for block:', block);
+
+      if (!block.type) {
+        console.error('Block type is missing:', block);
+        toast.error('Error: Tipo de bloque no definido');
+        return [];
+      }
+
+      const questions = await loadBlockQuestions(
+        block.id || '',
+        block.type,
+        block.quantity || 1
+      );
+
+      console.log(`Loaded ${questions.length} questions for block`);
+
+      if (questions.length === 0) {
+        toast.error(`No se encontraron preguntas para el bloque de tipo ${block.type}`);
+        return [];
+      }
+
+      // Actualizar el test con las preguntas cargadas
+      const updatedTest = await updateTestQuestions(
+        currentTest.id,
+        blockIndex,
+        questions
+      );
+
+      setTest(updatedTest);
+      return questions;
+    } catch (error) {
+      console.error('Error loading questions for block:', error);
+      toast.error('Error al cargar las preguntas del bloque');
+      return [];
+    }
   };
 
-  const handleTestComplete = () => {
-    console.log('Test completado:', answers);
-    navigate('/dashboard', { state: { testCompleted: true, answers } });
-  };
+  const handleBlockComplete = async () => {
+    if (!session || !test) return;
 
-  const handleImagePhaseComplete = () => {
-    setShowingImages(false);
-    setShowingDistraction(true);
-    setTimeout(() => {
-      setShowingDistraction(false);
-    }, 5000); // Mostrar pregunta de distracción por 5 segundos
+    try {
+      if (currentBlockIndex < test.blocks.length - 1) {
+        const nextBlockIndex = currentBlockIndex + 1;
+        await loadQuestionsForBlock(nextBlockIndex, test);
+        setCurrentBlockIndex(nextBlockIndex);
+        setCurrentQuestionIndex(0);
+
+        // Actualizar sesión
+        const sessionRef = doc(db, 'testSessions', session.id);
+        await updateDoc(sessionRef, {
+          currentBlock: nextBlockIndex,
+          currentQuestion: 0
+        });
+      } else {
+        // Test completado
+        const sessionRef = doc(db, 'testSessions', session.id);
+        await updateDoc(sessionRef, {
+          completed: true,
+          completedAt: new Date()
+        });
+
+        // Eliminar el test temporal
+        if (test.isTemporary) {
+          await deleteDoc(doc(db, 'tests', test.id));
+        }
+
+        navigate(`/results/${session.id}`);
+      }
+    } catch (error) {
+      console.error('Error completing block:', error);
+      toast.error('Error al completar el bloque');
+    }
   };
 
   if (loading) {
@@ -184,157 +208,85 @@ const TestScreen: React.FC = () => {
     );
   }
 
-  if (!test) {
-    return (
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900">Test no encontrado</h2>
-        <p className="mt-2 text-gray-600">El test que buscas no está disponible.</p>
-      </div>
-    );
+  if (!test || !session) {
+    return null;
   }
 
-  const currentQuestion = getCurrentQuestion();
-  if (!currentQuestion) return null;
+  const currentBlock = test.blocks[currentBlockIndex];
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        {/* Header mejorado */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">{test.title}</h1>
+          <p className="mt-2 text-gray-600">{test.description}</p>
+        </div>
+
+        <div className="mb-4">
           <div className="flex justify-between items-center">
-            <div className="space-y-1">
-              <h1 className="text-2xl font-bold text-gray-900">{test?.title}</h1>
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <span>Bloque {currentBlockIndex + 1} de {test?.blocks.length}</span>
-                <span>•</span>
-                <span>Pregunta {currentQuestionIndex + 1} de {test?.blocks[currentBlockIndex]?.questions.length}</span>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2 px-4 py-2 bg-[#f0f7eb] rounded-lg">
-                <Timer className="h-5 w-5 text-[#91c26a]" />
-                <span className="font-medium text-[#91c26a]">{formatTime(timeLeft)}</span>
-              </div>
-            </div>
+            <span className="text-lg font-medium">
+              Bloque {currentBlockIndex + 1} de {test.blocks.length}
+            </span>
+            <span className="text-sm text-gray-500">
+              Pregunta {currentQuestionIndex + 1} de {currentBlock.quantity}
+            </span>
           </div>
-          {/* Barra de progreso */}
-          <div className="mt-4 h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-[#91c26a] transition-all duration-300"
-              style={{ 
-                width: `${((currentBlockIndex * test?.blocks[currentBlockIndex]?.questions.length + currentQuestionIndex) / 
-                (test?.blocks.reduce((acc, block) => acc + block.questions.length, 0) || 1)) * 100}%` 
+          <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+            <div
+              className="bg-[#91c26a] h-2 rounded-full"
+              style={{
+                width: `${((currentBlockIndex * currentBlock.quantity + currentQuestionIndex + 1) /
+                  (test.blocks.reduce((acc, block) => acc + block.quantity, 0))) *
+                  100}%`
               }}
             />
           </div>
         </div>
 
-        {/* Contenido principal con animaciones */}
-        <div className="bg-white shadow-lg rounded-lg p-8 transition-all duration-300">
-          {showingImages ? (
-            <div className="space-y-6 animate-fadeIn">
-              <h2 className="text-2xl font-bold text-gray-900 text-center">
-                Memoriza las siguientes imágenes
-              </h2>
-              <div className="grid grid-cols-2 gap-6">
-                {currentQuestion?.images?.map((url, index) => (
-                  <div key={index} className="relative group transform hover:scale-105 transition-all duration-300">
-                    <img
-                      src={url}
-                      alt={`Imagen ${index + 1}`}
-                      className="w-full h-56 object-cover rounded-lg shadow-md"
-                    />
-                    <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 
-                                  text-sm font-medium shadow-sm group-hover:bg-[#91c26a] group-hover:text-white transition-all">
-                      {index + 1}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={handleImagePhaseComplete}
-                className="w-full mt-6 py-4 px-6 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] 
-                         transform hover:scale-105 transition-all duration-300 flex items-center justify-center space-x-2"
-              >
-                <span>Continuar</span>
-                <ArrowRight className="h-5 w-5" />
-              </button>
-            </div>
-          ) : showingDistraction ? (
-            <div className="space-y-6 animate-fadeIn">
-              <h3 className="text-2xl font-bold text-gray-900 text-center mb-8">
-                {currentQuestion?.distractionQuestion?.question}
-              </h3>
-              <div className="grid grid-cols-2 gap-6">
-                {currentQuestion?.distractionQuestion?.options.map((option, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedAnswer(index)}
-                    className={`p-6 rounded-lg border-2 transition-all duration-300 transform hover:scale-105
-                              ${selectedAnswer === index
-                                ? 'border-[#91c26a] bg-[#f0f7eb] shadow-md'
-                                : 'border-gray-200 hover:border-[#91c26a] hover:shadow-md'
-                              }`}
-                  >
-                    <span className="text-lg">{option}</span>
-                  </button>
-                ))}
-              </div>
+        {/* Renderizar el componente específico según el tipo de bloque */}
+        <div className="mt-6">
+          {currentBlock.questions && currentBlock.questions.length > 0 ? (
+            <div>
+              {currentBlock.type === 'Memoria' && (
+                <div>
+                  {/* Componente de Memoria */}
+                  <p>Componente de Memoria</p>
+                </div>
+              )}
+              {currentBlock.type === 'Texto' && (
+                <div>
+                  {/* Componente de Texto */}
+                  <p>Componente de Texto</p>
+                </div>
+              )}
+              {currentBlock.type === 'Distracción' && (
+                <div>
+                  {/* Componente de Distracción */}
+                  <p>Componente de Distracción</p>
+                </div>
+              )}
+              {currentBlock.type === 'Secuencia' && (
+                <div>
+                  {/* Componente de Secuencia */}
+                  <p>Componente de Secuencia</p>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="space-y-6 animate-fadeIn">
-              <h3 className="text-2xl font-bold text-gray-900 text-center mb-8">
-                ¿Cuál de estas imágenes viste antes?
-              </h3>
-              <div className="grid grid-cols-2 gap-6">
-                {currentQuestion?.images?.map((url, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleAnswerSelect(index)}
-                    disabled={selectedAnswer !== null}
-                    className={`relative p-0 border-2 rounded-lg overflow-hidden transition-all duration-300 
-                              transform hover:scale-105 ${
-                      selectedAnswer === index
-                        ? 'border-[#91c26a] ring-2 ring-[#91c26a] shadow-lg'
-                        : 'border-gray-200 hover:border-[#91c26a] hover:shadow-md'
-                    }`}
-                  >
-                    <img
-                      src={url}
-                      alt={`Imagen ${index + 1}`}
-                      className="w-full h-56 object-cover"
-                    />
-                    <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 
-                                  text-sm font-medium shadow-sm">
-                      {index + 1}
-                    </div>
-                  </button>
-                ))}
-              </div>
+            <div className="text-center py-4">
+              <p className="text-gray-600">Cargando preguntas...</p>
             </div>
           )}
         </div>
 
-        {/* Feedback animado */}
-        {showFeedback && (
-          <div className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 
-                          flex items-center space-x-3 px-6 py-4 rounded-lg shadow-lg animate-fadeInScale
-                          ${isCorrect ? 'bg-green-100' : 'bg-red-100'}`}>
-            {isCorrect ? (
-              <>
-                <CheckCircle className="h-6 w-6 text-green-600" />
-                <span className="text-lg font-medium text-green-900">¡Correcto!</span>
-              </>
-            ) : (
-              <>
-                <XCircle className="h-6 w-6 text-red-600" />
-                <span className="text-lg font-medium text-red-900">
-                  Incorrecto. La respuesta era la imagen {currentQuestion?.correctImageIndex! + 1}
-                </span>
-              </>
-            )}
-          </div>
-        )}
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={handleBlockComplete}
+            className="px-4 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors"
+          >
+            Siguiente
+          </button>
+        </div>
       </div>
     </div>
   );

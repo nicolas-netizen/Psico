@@ -3,8 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import SplashScreen from './components/animations/SplashScreen';
-import { createInitialQuestions, createInitialPlans, createInitialTests } from './services/firestore';
+import { initializeFirestore } from './firebase/firestore';
 import { Toaster } from 'react-hot-toast';
 
 // Componentes de autenticación
@@ -14,14 +13,14 @@ import Register from './components/auth/Register';
 // Componentes principales
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import Dashboard from './components/user/Dashboard';
+import Dashboard from './components/Dashboard';
 import TestTakingPage from './pages/TestTakingPage';
 import TestResultsPage from './components/test/TestResultsPage';
 import PlanList from './components/plans/PlanList';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
 import BaremoCalculatorPage from './pages/BaremoCalculatorPage';
-import TestResults from './components/test/TestResults';
+import TestResults from './components/TestResults';
 import TestScreen from './pages/TestScreen';
 import Results from './components/Results';
 import TestManager from './components/admin/TestManager';
@@ -51,32 +50,28 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 };
 
 function App() {
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const initializeApp = async () => {
+    const init = async () => {
       try {
-        // Crear preguntas, planes y tests iniciales si no existen
-        await Promise.all([
-          createInitialQuestions(),
-          createInitialPlans(),
-          createInitialTests()
-        ]);
+        await initializeFirestore();
       } catch (error) {
         console.error('Error initializing app:', error);
       } finally {
-        // Simular un tiempo de carga mínimo
-        setTimeout(() => {
-          setIsLoading(false);
-        }, 2000);
+        setLoading(false);
       }
     };
 
-    initializeApp();
+    init();
   }, []);
 
-  if (isLoading) {
-    return <SplashScreen />;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-[#91c26a]"></div>
+      </div>
+    );
   }
 
   return (
@@ -106,10 +101,10 @@ function App() {
                 } 
               />
               <Route 
-                path="/test/:testId" 
+                path="/test/:testId?" 
                 element={
                   <PrivateRoute>
-                    <TestTakingPage />
+                    <TestScreen />
                   </PrivateRoute>
                 } 
               />
@@ -117,15 +112,7 @@ function App() {
                 path="/test/:testId/results" 
                 element={
                   <PrivateRoute>
-                    <TestResultsPage />
-                  </PrivateRoute>
-                } 
-              />
-              <Route 
-                path="/test-screen/:testId?" 
-                element={
-                  <PrivateRoute>
-                    <TestScreen />
+                    <TestResults />
                   </PrivateRoute>
                 } 
               />

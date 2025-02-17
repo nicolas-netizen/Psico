@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Funciones de ayuda
+    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -9,43 +9,100 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Regla temporal para desarrollo - REMOVER EN PRODUCCIÓN
-    match /{document=**} {
-      allow read, write: if true;
+    function hasCustomTestFeature() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId != null &&
+        get(/databases/$(database)/documents/plans/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId)).data.hasCustomTest == true;
     }
 
-    // Las reglas específicas se aplicarán después de la fase inicial de desarrollo
+    function isTestOwner(testId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/tests/$(testId)) &&
+        get(/databases/$(database)/documents/tests/$(testId)).data.createdBy == request.auth.uid;
+    }
+
+    // User rules
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
     }
 
+    // Plans rules
+    match /plans/{planId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Discount codes rules
+    match /discountCodes/{codeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Purchases rules
+    match /purchases/{purchaseId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Questions rules
     match /questions/{questionId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
+    // Test blocks rules
+    match /testBlocks/{blockId} {
+      allow read: if true;  // Allow all reads for now
+      allow write: if isAdmin();
+    }
+
+    // Tests rules
     match /tests/{testId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        resource.data.isPublic == true || 
+        isTestOwner(testId) || 
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && hasCustomTestFeature();
+      allow update, delete: if isAuthenticated() && (isTestOwner(testId) || isAdmin());
     }
 
+    // Test results rules
     match /testResults/{resultId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
     }
 
+    // Test sessions rules
     match /testSessions/{sessionId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
 
+    // Baremo rules
     match /baremo/{blockId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
+    }
+
+    // Other collections...
+    match /{document=**} {
+      allow read, write: if isAdmin();
     }
   }
 }

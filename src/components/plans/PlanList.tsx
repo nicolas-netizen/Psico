@@ -1,135 +1,204 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/firebaseConfig';
 import { toast } from 'react-hot-toast';
-import { CheckCircle2, Star } from 'lucide-react';
+import { Check, X } from 'lucide-react';
+import { purchasePlan } from '../../services/firestore';
 
 interface Plan {
   id: string;
   name: string;
-  price: number;
   description: string;
+  price: number;
   features: string[];
-  recommended?: boolean;
-  featured?: boolean;
+  isFeatured: boolean;
 }
 
-interface PlanListProps {
-  hideActions?: boolean;
+interface DiscountCode {
+  code: string;
+  discountPercentage: number;
+  validUntil: Date;
 }
 
-const PlanList: React.FC<PlanListProps> = ({ hideActions = false }) => {
-  const { user } = useAuth();
+const PlanList = () => {
+  const { currentUser } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [discount, setDiscount] = useState(0);
+  const [isValidating, setIsValidating] = useState(false);
 
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const plansRef = collection(db, 'plans');
-        const snapshot = await getDocs(plansRef);
-        
-        const plansData = snapshot.docs.map(doc => ({
+        const querySnapshot = await getDocs(collection(db, 'plans'));
+        const plansData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as Plan[];
-        
-        plansData.sort((a, b) => a.price - b.price);
         setPlans(plansData);
       } catch (error) {
         console.error('Error fetching plans:', error);
         toast.error('Error al cargar los planes');
-      } finally {
-        setLoading(false);
       }
     };
 
     fetchPlans();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-16">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#91c26a]"></div>
-      </div>
-    );
-  }
+  const validatePromoCode = async () => {
+    setIsValidating(true);
+    try {
+      const codesRef = collection(db, 'discountCodes');
+      const q = query(codesRef, where('code', '==', promoCode.toUpperCase()));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const codeData = querySnapshot.docs[0].data() as DiscountCode;
+        if (new Date(codeData.validUntil) > new Date()) {
+          setDiscount(codeData.discountPercentage);
+          toast.success(`¡Código aplicado! ${codeData.discountPercentage}% de descuento`);
+        } else {
+          toast.error('Este código ha expirado');
+          setDiscount(0);
+        }
+      } else {
+        toast.error('Código no válido');
+        setDiscount(0);
+      }
+    } catch (error) {
+      console.error('Error validating code:', error);
+      toast.error('Error al validar el código');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handlePurchase = async (plan: Plan) => {
+    if (!currentUser) {
+      toast.error('Debes iniciar sesión para comprar un plan');
+      return;
+    }
+
+    try {
+      setIsValidating(true);
+      const result = await purchasePlan(currentUser.uid, plan.id, promoCode || undefined);
+      
+      if (result.success) {
+        toast.success(`¡Plan ${result.planName} actualizado exitosamente!`);
+        setPromoCode('');
+        setDiscount(0);
+      }
+    } catch (error) {
+      console.error('Error purchasing plan:', error);
+      toast.error('Error al procesar la compra');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const calculatePrice = (price: number) => {
+    if (discount > 0) {
+      return price * (1 - discount / 100);
+    }
+    return price;
+  };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {plans.map((plan) => (
-          <div
-            key={plan.id}
-            className={`
-              relative bg-white rounded-2xl p-8
-              transform transition-all duration-300
-              ${plan.recommended 
-                ? 'ring-4 ring-[#91c26a] ring-opacity-50 scale-105 shadow-xl' 
-                : 'hover:shadow-xl hover:scale-102 shadow-lg'
-              }
-            `}
-          >
-            {/* Badge de Recomendado/Destacado */}
-            {(plan.recommended || plan.featured) && (
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <div 
-                  className={`
-                    inline-flex items-center px-4 py-1 rounded-full text-sm font-semibold
-                    ${plan.recommended 
-                      ? 'bg-[#91c26a] text-white' 
-                      : 'bg-[#f3f4f6] text-gray-700'
-                    }
-                  `}
-                >
-                  <Star className="w-4 h-4 mr-1" />
-                  {plan.recommended ? 'Recomendado' : 'Destacado'}
+    <div className="py-12 bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+            Planes y Precios
+          </h2>
+          <p className="mt-4 text-xl text-gray-600">
+            Elige el plan que mejor se adapte a tus necesidades
+          </p>
+        </div>
+
+        <div className="mt-8">
+          <div className="flex justify-center mb-8">
+            <div className="relative">
+              <input
+                type="text"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                placeholder="Código promocional"
+                className="px-4 py-2 border border-gray-300 rounded-l-md focus:ring-[#91c26a] focus:border-[#91c26a] block w-full sm:text-sm"
+              />
+              <button
+                onClick={validatePromoCode}
+                disabled={isValidating || !promoCode}
+                className="absolute inset-y-0 right-0 px-4 py-2 bg-[#91c26a] text-white rounded-r-md hover:bg-[#82b35b] disabled:bg-gray-300"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {plans.map((plan) => (
+              <div
+                key={plan.id}
+                className={`relative rounded-lg shadow-sm divide-y divide-gray-200 bg-white ${
+                  plan.isFeatured ? 'border-2 border-[#91c26a]' : ''
+                }`}
+              >
+                {plan.isFeatured && (
+                  <div className="absolute top-0 right-0 -translate-y-1/2 transform">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#91c26a] text-white">
+                      Recomendado
+                    </span>
+                  </div>
+                )}
+
+                <div className="p-6">
+                  <h3 className="text-lg font-medium text-gray-900">{plan.name}</h3>
+                  <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
+                  <p className="mt-8">
+                    <span className="text-4xl font-extrabold text-gray-900">
+                      ${calculatePrice(plan.price).toFixed(2)}
+                    </span>
+                    <span className="text-base font-medium text-gray-500">/mes</span>
+                  </p>
+                  {discount > 0 && (
+                    <p className="mt-2">
+                      <span className="text-sm line-through text-gray-500">
+                        ${plan.price.toFixed(2)}
+                      </span>
+                      <span className="ml-2 text-sm text-[#91c26a]">
+                        {discount}% descuento aplicado
+                      </span>
+                    </p>
+                  )}
+                  <button
+                    onClick={() => handlePurchase(plan)}
+                    className="mt-8 block w-full bg-[#91c26a] text-white rounded-md py-2 text-sm font-semibold hover:bg-[#82b35b] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#91c26a]"
+                  >
+                    Seleccionar Plan
+                  </button>
+                </div>
+
+                <div className="pt-6 pb-8 px-6">
+                  <h4 className="text-sm font-medium text-gray-900 tracking-wide uppercase">
+                    Características
+                  </h4>
+                  <ul className="mt-4 space-y-3">
+                    {plan.features.map((feature, index) => (
+                      <li key={index} className="flex items-start">
+                        <div className="flex-shrink-0">
+                          <Check className="h-5 w-5 text-[#91c26a]" />
+                        </div>
+                        <p className="ml-3 text-sm text-gray-700">{feature}</p>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
-            )}
-
-            {/* Encabezado del Plan */}
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">{plan.name}</h3>
-              <p className="text-gray-600 mb-6">{plan.description}</p>
-              <div className="flex items-baseline justify-center">
-                <span className="text-4xl font-extrabold text-[#91c26a]">
-                  ${plan.price.toLocaleString()}
-                </span>
-                <span className="text-gray-500 ml-2">/mes</span>
-              </div>
-            </div>
-
-            {/* Lista de Características */}
-            <ul className="space-y-4 mb-8">
-              {plan.features.map((feature, index) => (
-                <li key={index} className="flex items-start">
-                  <CheckCircle2 className="h-6 w-6 text-[#91c26a] flex-shrink-0 mt-0.5" />
-                  <span className="ml-3 text-gray-600">{feature}</span>
-                </li>
-              ))}
-            </ul>
-
-            {/* Botón de Acción */}
-            {!hideActions && (
-              <div className="mt-8">
-                <button
-                  className={`
-                    w-full py-4 px-6 rounded-xl text-center text-base font-semibold
-                    transition-all duration-300 transform
-                    ${plan.recommended
-                      ? 'bg-[#91c26a] text-white hover:bg-[#7ea756] hover:-translate-y-1'
-                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200 hover:-translate-y-1'
-                    }
-                  `}
-                >
-                  Comenzar Ahora
-                </button>
-              </div>
-            )}
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );

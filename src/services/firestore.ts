@@ -38,6 +38,7 @@ export interface Test {
   }>;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+  createdBy?: string;
 }
 
 export interface TestResult {
@@ -364,6 +365,154 @@ export const createInitialTest = async () => {
     }
   } catch (error) {
     console.error('Error in createInitialTest:', error);
+    throw error;
+  }
+};
+
+export const createInitialTests = async () => {
+  try {
+    console.log('Checking for existing tests...');
+    const testsRef = collection(db, 'tests');
+    const querySnapshot = await getDocs(testsRef);
+    
+    if (querySnapshot.empty) {
+      console.log('No tests found, creating initial tests...');
+      const initialTests = [
+        {
+          title: "Test de Memoria Visual",
+          description: "Evalúa tu capacidad de memoria visual y atención",
+          timeLimit: 15, // 15 minutos
+          isPublic: true,
+          blocks: [
+            {
+              type: "memory",
+              quantity: 2,
+              questions: [
+                {
+                  type: "memory",
+                  images: [
+                    "https://picsum.photos/400/300?random=1",
+                    "https://picsum.photos/400/300?random=2"
+                  ],
+                  correctImageIndex: 0,
+                  distractionQuestion: {
+                    question: "¿Cuánto es 7 + 3?",
+                    options: ["9", "10", "11", "12"],
+                    correctAnswer: 1
+                  }
+                },
+                {
+                  type: "memory",
+                  images: [
+                    "https://picsum.photos/400/300?random=3",
+                    "https://picsum.photos/400/300?random=4"
+                  ],
+                  correctImageIndex: 1,
+                  distractionQuestion: {
+                    question: "¿Cuál es la capital de Francia?",
+                    options: ["Londres", "Madrid", "París", "Roma"],
+                    correctAnswer: 2
+                  }
+                }
+              ]
+            }
+          ],
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        }
+      ];
+
+      for (const test of initialTests) {
+        const docRef = await addDoc(testsRef, {
+          ...test,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        });
+        console.log('Created test with ID:', docRef.id);
+      }
+
+      console.log('Initial tests created successfully');
+    } else {
+      console.log('Tests already exist:', querySnapshot.size, 'tests found');
+    }
+  } catch (error) {
+    console.error('Error creating initial tests:', error);
+    throw new Error('Error al crear los tests iniciales');
+  }
+};
+
+export const createTest = async (testData: Omit<Test, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>): Promise<string> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Usuario no autenticado');
+
+    const testsRef = collection(db, 'tests');
+    const newTest = {
+      ...testData,
+      createdBy: user.uid,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    };
+
+    const docRef = await addDoc(testsRef, newTest);
+    console.log('Test created successfully with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating test:', error);
+    throw error;
+  }
+};
+
+export const updateTest = async (testId: string, testData: Partial<Test>): Promise<void> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Usuario no autenticado');
+
+    const testRef = doc(db, 'tests', testId);
+    const testDoc = await getDoc(testRef);
+    
+    if (!testDoc.exists()) {
+      throw new Error('Test no encontrado');
+    }
+
+    const testOwner = testDoc.data()?.createdBy;
+    if (testOwner !== user.uid && !(await isUserAdmin(user.uid))) {
+      throw new Error('No tienes permiso para editar este test');
+    }
+
+    await updateDoc(testRef, {
+      ...testData,
+      updatedAt: Timestamp.now()
+    });
+
+    console.log('Test updated successfully');
+  } catch (error) {
+    console.error('Error updating test:', error);
+    throw error;
+  }
+};
+
+export const deleteTest = async (testId: string): Promise<void> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Usuario no autenticado');
+
+    const testRef = doc(db, 'tests', testId);
+    const testDoc = await getDoc(testRef);
+    
+    if (!testDoc.exists()) {
+      throw new Error('Test no encontrado');
+    }
+
+    const testOwner = testDoc.data()?.createdBy;
+    if (testOwner !== user.uid && !(await isUserAdmin(user.uid))) {
+      throw new Error('No tienes permiso para eliminar este test');
+    }
+
+    await deleteDoc(testRef);
+    console.log('Test deleted successfully');
+  } catch (error) {
+    console.error('Error deleting test:', error);
     throw error;
   }
 };
@@ -841,5 +990,133 @@ export const createInitialPlans = async () => {
   } catch (error) {
     console.error('Error creating initial plans:', error);
     throw new Error('Error al crear los planes iniciales');
+  }
+};
+
+// Discount Codes
+export const createDiscountCode = async (code: string, discountPercentage: number, validUntil: Date) => {
+  try {
+    const discountCodesRef = collection(db, 'discountCodes');
+    await addDoc(discountCodesRef, {
+      code: code.toUpperCase(),
+      discountPercentage,
+      validUntil,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    });
+  } catch (error) {
+    console.error('Error creating discount code:', error);
+    throw new Error('Error al crear el código de descuento');
+  }
+};
+
+export const validateDiscountCode = async (code: string): Promise<number | null> => {
+  try {
+    const codesRef = collection(db, 'discountCodes');
+    const q = query(codesRef, where('code', '==', code.toUpperCase()));
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+      const codeData = querySnapshot.docs[0].data();
+      if (new Date(codeData.validUntil.toDate()) > new Date()) {
+        return codeData.discountPercentage;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Error validating discount code:', error);
+    throw new Error('Error al validar el código de descuento');
+  }
+};
+
+// Initialize discount codes
+export const createInitialDiscountCodes = async () => {
+  try {
+    const codesRef = collection(db, 'discountCodes');
+    const querySnapshot = await getDocs(codesRef);
+    
+    if (querySnapshot.empty) {
+      const initialCodes = [
+        {
+          code: 'WELCOME2024',
+          discountPercentage: 20,
+          validUntil: new Date('2024-12-31'),
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        },
+        {
+          code: 'STUDENT50',
+          discountPercentage: 50,
+          validUntil: new Date('2024-06-30'),
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        }
+      ];
+
+      for (const code of initialCodes) {
+        await addDoc(codesRef, code);
+      }
+
+      console.log('Initial discount codes created successfully');
+    }
+  } catch (error) {
+    console.error('Error creating initial discount codes:', error);
+    throw new Error('Error al crear los códigos de descuento iniciales');
+  }
+};
+
+// Purchase plan
+export const purchasePlan = async (userId: string, planId: string, discountCode?: string) => {
+  try {
+    let finalPrice = 0;
+    let discount = 0;
+
+    // Get plan details
+    const planDoc = await getDoc(doc(db, 'plans', planId));
+    if (!planDoc.exists()) {
+      throw new Error('Plan no encontrado');
+    }
+    const plan = planDoc.data();
+    finalPrice = plan.price;
+
+    // Apply discount if code is valid
+    if (discountCode) {
+      discount = await validateDiscountCode(discountCode) || 0;
+      finalPrice = finalPrice * (1 - discount / 100);
+    }
+
+    // Update user's plan
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      planId,
+      planName: plan.name,
+      planPrice: finalPrice,
+      discountApplied: discount,
+      planPurchasedAt: Timestamp.now(),
+      planExpiresAt: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // 30 days
+      updatedAt: Timestamp.now()
+    });
+
+    // Create purchase record
+    await addDoc(collection(db, 'purchases'), {
+      userId,
+      planId,
+      planName: plan.name,
+      originalPrice: plan.price,
+      discountCode: discountCode || null,
+      discountPercentage: discount,
+      finalPrice,
+      purchasedAt: Timestamp.now()
+    });
+
+    return {
+      success: true,
+      planName: plan.name,
+      finalPrice,
+      discountApplied: discount
+    };
+  } catch (error) {
+    console.error('Error purchasing plan:', error);
+    throw new Error('Error al procesar la compra del plan');
   }
 };

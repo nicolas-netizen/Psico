@@ -4,7 +4,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import SplashScreen from './components/animations/SplashScreen';
-import { createInitialQuestions, createInitialPlans } from './services/firestore';
+import { createInitialQuestions, createInitialPlans, createInitialTests } from './services/firestore';
 import { Toaster } from 'react-hot-toast';
 
 // Componentes de autenticación
@@ -22,7 +22,7 @@ import Home from './pages/Home';
 import Admin from './pages/Admin';
 import BaremoCalculatorPage from './pages/BaremoCalculatorPage';
 import TestResults from './components/test/TestResults';
-import TestScreen from './components/TestScreen';
+import TestScreen from './pages/TestScreen';
 import Results from './components/Results';
 import TestManager from './components/admin/TestManager';
 import AdminRoute from './components/auth/AdminRoute';
@@ -56,10 +56,11 @@ function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Crear preguntas y planes iniciales si no existen
+        // Crear preguntas, planes y tests iniciales si no existen
         await Promise.all([
           createInitialQuestions(),
-          createInitialPlans()
+          createInitialPlans(),
+          createInitialTests()
         ]);
       } catch (error) {
         console.error('Error initializing app:', error);
@@ -121,7 +122,7 @@ function App() {
                 } 
               />
               <Route 
-                path="/test/:testId?" 
+                path="/test-screen/:testId?" 
                 element={
                   <PrivateRoute>
                     <TestScreen />

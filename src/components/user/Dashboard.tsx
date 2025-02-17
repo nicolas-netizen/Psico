@@ -1,428 +1,155 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/firebaseConfig';
-import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Book, Calendar, Crown, Settings, Target, User } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-hot-toast';
 
-interface UserPlan {
+interface TestBlock {
   id: string;
+  type: string;
   name: string;
-  price: number;
-  features: string[];
-  daysRemaining: number;
-  hasCustomTest: boolean;
-}
-
-interface Test {
-  id: string;
-  title: string;
   description: string;
-  duration: number;
-  category: string;
-  plans: string[];
+  defaultQuantity: number;
+  isActive: boolean;
   questions: any[];
-  timeLimit: number;
 }
-
-interface ProgressBarProps {
-  percentage: number;
-}
-
-const ProgressBar: React.FC<ProgressBarProps> = ({ percentage }) => {
-  const getColorClass = (percentage: number) => {
-    if (percentage >= 80) return 'bg-[#91c26a]'; // Verde para excelente
-    if (percentage >= 50) return 'bg-yellow-500'; // Amarillo para aprobado
-    return 'bg-red-500'; // Rojo para no aprobado
-  };
-
-  const getStatusText = (percentage: number) => {
-    if (percentage >= 80) return 'Completado';
-    if (percentage >= 50) return 'Aprobado';
-    return 'No Aprobado';
-  };
-
-  return (
-    <div className="space-y-1">
-      <div className="h-4 w-full bg-gray-200 rounded-full overflow-hidden">
-        <div
-          className={`h-full ${getColorClass(percentage)} transition-all duration-300 flex items-center justify-center text-white text-xs font-medium`}
-          style={{ width: `${percentage}%` }}
-        >
-          {percentage.toFixed(1)}%
-        </div>
-      </div>
-      <div className={`text-xs font-medium ${percentage < 50 ? 'text-red-500' : 'text-gray-600'}`}>
-        {getStatusText(percentage)}
-      </div>
-    </div>
-  );
-};
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
-  const navigate = useNavigate();
-  const [userPlan, setUserPlan] = useState<UserPlan | null>(null);
-  const [availableTests, setAvailableTests] = useState<Test[]>([]);
-  const [discountCode, setDiscountCode] = useState('');
-  const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+  const [testName, setTestName] = useState('');
+  const [description, setDescription] = useState('');
+  const [timeLimit, setTimeLimit] = useState(30);
+  const [blocks, setBlocks] = useState<TestBlock[]>([]);
   const [loading, setLoading] = useState(true);
-  const [applyingDiscount, setApplyingDiscount] = useState(false);
-  const [discountedPrice, setDiscountedPrice] = useState<number | null>(null);
-  const [recentResults, setRecentResults] = useState<any[]>([]);
-  const [loadingResults, setLoadingResults] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    loadUserData();
-    loadAvailablePlans();
-    loadRecentResults();
-  }, [currentUser]);
+    fetchTestBlocks();
+  }, []);
 
-  const loadUserData = async () => {
-    try {
-      if (!currentUser) return;
-
-      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      const userData = userDoc.data();
-
-      if (userData?.planId) {
-        const planDoc = await getDoc(doc(db, 'plans', userData.planId));
-        const planData = planDoc.data();
-        
-        setUserPlan({
-          id: planDoc.id,
-          name: planData?.name || '',
-          price: planData?.price || 0,
-          features: planData?.features || [],
-          daysRemaining: Math.ceil((userData.planExpiryDate?.toDate() - new Date()) / (1000 * 60 * 60 * 24)) || 0,
-          hasCustomTest: planData?.hasCustomTest || false
-        });
-
-        // Obtener tests disponibles para el plan del usuario
-        const testsQuery = query(
-          collection(db, 'tests'),
-          where('plans', 'array-contains', userData.planId)
-        );
-        const testsSnapshot = await getDocs(testsQuery);
-        setAvailableTests(
-          testsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as Test[]
-        );
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-      toast.error('Error al cargar los datos del usuario');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadAvailablePlans = async () => {
-    try {
-      const plansSnapshot = await getDocs(collection(db, 'plans'));
-      const plans = plansSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setAvailablePlans(plans.sort((a, b) => a.price - b.price));
-    } catch (error) {
-      console.error('Error loading plans:', error);
-      toast.error('Error al cargar los planes disponibles');
-    }
-  };
-
-  const verifyDiscountCode = async () => {
-    if (!discountCode) return;
-    
-    setApplyingDiscount(true);
-    try {
-      const discountQuery = query(
-        collection(db, 'discountCodes'),
-        where('code', '==', discountCode.toUpperCase()),
-        where('isActive', '==', true)
-      );
-      const discountSnapshot = await getDocs(discountQuery);
-      
-      if (!discountSnapshot.empty) {
-        const discountData = discountSnapshot.docs[0].data();
-        if (discountData.currentUses < discountData.maxUses &&
-            new Date() < discountData.validUntil.toDate()) {
-          setDiscountedPrice(discountData.discount);
-          toast.success(`Código válido! ${discountData.discount}% de descuento aplicado`);
-        } else {
-          toast.error('Código de descuento no válido o expirado');
-          setDiscountedPrice(null);
-        }
-      } else {
-        toast.error('Código de descuento no válido');
-        setDiscountedPrice(null);
-      }
-    } catch (error) {
-      console.error('Error verifying discount code:', error);
-      toast.error('Error al verificar el código de descuento');
-    } finally {
-      setApplyingDiscount(false);
-    }
-  };
-
-  const handleStartTest = async (testId: string) => {
-    try {
-      // Navegar a la página del test
-      navigate(`/test/${testId}`);
-    } catch (error) {
-      console.error('Error starting test:', error);
-      toast.error('Error al iniciar el test');
-    }
-  };
-
-  const handlePurchasePlan = async (planId: string, price: number) => {
+  const fetchTestBlocks = async () => {
     try {
       setLoading(true);
+      const blocksRef = collection(db, 'testBlocks');
+      const q = query(blocksRef, where('isActive', '==', true));
+      const querySnapshot = await getDocs(q);
       
-      let finalPrice = price;
-      if (discountedPrice) {
-        finalPrice = price * (1 - discountedPrice / 100);
-      }
+      const fetchedBlocks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as TestBlock[];
 
-      // Aquí iría la integración con el sistema de pagos
-      // Por ahora solo actualizamos el plan del usuario
-      const planExpiryDate = new Date();
-      planExpiryDate.setDate(planExpiryDate.getDate() + 30);
-
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        planId,
-        planExpiryDate,
-      });
-
-      if (discountCode) {
-        const discountQuery = query(
-          collection(db, 'discountCodes'),
-          where('code', '==', discountCode.toUpperCase())
-        );
-        const discountSnapshot = await getDocs(discountQuery);
-        if (!discountSnapshot.empty) {
-          await updateDoc(doc(db, 'discountCodes', discountSnapshot.docs[0].id), {
-            currentUses: discountSnapshot.docs[0].data().currentUses + 1
-          });
-        }
-      }
-
-      toast.success('Plan actualizado exitosamente');
-      setDiscountCode('');
-      setDiscountedPrice(null);
-      loadUserData();
-    } catch (error) {
-      console.error('Error purchasing plan:', error);
-      toast.error('Error al procesar la compra');
+      console.log('Fetched blocks:', fetchedBlocks);
+      setBlocks(fetchedBlocks);
+      setError('');
+    } catch (err) {
+      console.error('Error fetching test blocks:', err);
+      setError('Error al cargar los bloques de test');
+      toast.error('Error al cargar los bloques de test');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadRecentResults = async () => {
-    if (!currentUser) return;
-    
-    try {
-      setLoadingResults(true);
-      const results = await getDocs(collection(db, 'testResults', currentUser.uid, 'results'));
-      // Ordenar por fecha más reciente y tomar los últimos 5
-      const sortedResults = results.docs.map(doc => doc.data())
-        .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())
-        .slice(0, 5);
-      setRecentResults(sortedResults);
-    } catch (error) {
-      console.error('Error al cargar resultados recientes:', error);
-      toast.error('Error al cargar los resultados recientes');
-    } finally {
-      setLoadingResults(false);
-    }
+  const handleCreateTest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Implementation for creating test...
   };
-
-  const handleViewAllResults = () => {
-    navigate('/results');
-  };
-
-  const handleRetakeTest = (testId: string) => {
-    navigate(`/test/${testId}`);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-white pt-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h2 className="text-2xl font-semibold mb-6">Crear Test Personalizado</h2>
+          
+          <form onSubmit={handleCreateTest} className="space-y-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Panel de Usuario</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Bienvenido, {currentUser?.email}
-              </p>
+              <label htmlFor="testName" className="block text-sm font-medium text-gray-700">
+                Nombre del Test
+              </label>
+              <input
+                type="text"
+                id="testName"
+                value={testName}
+                onChange={(e) => setTestName(e.target.value)}
+                placeholder="Ingresa el nombre del test"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a] sm:text-sm"
+                required
+              />
             </div>
-            {userPlan && (
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">{userPlan.name}</p>
-                  <p className="text-xs text-gray-500">{userPlan.daysRemaining} días restantes</p>
-                </div>
-                <Crown className="h-6 w-6 text-[#91c26a]" />
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Quick Actions Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Tests Disponibles */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Book className="h-6 w-6 text-[#91c26a]" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Tests Disponibles</dt>
-                    <dd className="text-lg font-semibold text-gray-900">{availableTests.length}</dd>
-                  </dl>
-                </div>
-              </div>
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                Descripción
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe el propósito del test"
+                rows={4}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a] sm:text-sm"
+                required
+              />
             </div>
-            <div className="bg-gray-50 px-5 py-3">
-              <div className="text-sm">
-                <button
-                  onClick={() => navigate('/tests')}
-                  className="font-medium text-[#91c26a] hover:text-[#82b35b] flex items-center"
-                >
-                  Ver todos
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
 
-          {/* Plan Actual */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Crown className="h-6 w-6 text-[#91c26a]" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Plan Actual</dt>
-                    <dd className="text-lg font-semibold text-gray-900">{userPlan?.name || 'Sin plan'}</dd>
-                  </dl>
-                </div>
-              </div>
+            <div>
+              <label htmlFor="timeLimit" className="block text-sm font-medium text-gray-700">
+                Tiempo Límite (minutos)
+              </label>
+              <input
+                type="number"
+                id="timeLimit"
+                value={timeLimit}
+                onChange={(e) => setTimeLimit(Number(e.target.value))}
+                min="1"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#91c26a] focus:ring-[#91c26a] sm:text-sm"
+                required
+              />
             </div>
-            <div className="bg-gray-50 px-5 py-3">
-              <div className="text-sm">
-                <button
-                  onClick={() => navigate('/planes')}
-                  className="font-medium text-[#91c26a] hover:text-[#82b35b] flex items-center"
-                >
-                  Cambiar plan
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
 
-          {/* Tests Personalizados */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Target className="h-6 w-6 text-[#91c26a]" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Tests Personalizados</dt>
-                    <dd className="text-lg font-semibold text-gray-900">
-                      {userPlan?.hasCustomTest ? 'Disponible' : 'No disponible'}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-50 px-5 py-3">
-              <div className="text-sm">
-                {userPlan?.hasCustomTest ? (
-                  <button
-                    onClick={() => {
-                      if (!currentUser) {
-                        navigate('/login');
-                        return;
-                      }
-                      navigate('/test-screen');
-                    }}
-                    className="font-medium text-[#91c26a] hover:text-[#82b35b] flex items-center"
-                  >
-                    Crear test
-                    <ArrowRight className="ml-1 h-4 w-4" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => navigate('/planes')}
-                    className="font-medium text-gray-500 hover:text-gray-700 flex items-center"
-                  >
-                    Mejorar plan
-                    <ArrowRight className="ml-1 h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Results Section */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">Resultados Recientes</h3>
-          </div>
-          <div className="px-6 py-5">
-            {loadingResults ? (
-              <div className="flex justify-center items-center h-32">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#91c26a]"></div>
-              </div>
-            ) : recentResults.length > 0 ? (
-              <div className="space-y-6">
-                {recentResults.map((result) => (
-                  <div key={result.id} className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">{result.testTitle}</h4>
-                      <p className="text-sm text-gray-500">{new Date(result.date).toLocaleDateString()}</p>
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Bloques Disponibles</h3>
+              {loading ? (
+                <p className="text-gray-500">Cargando bloques...</p>
+              ) : error ? (
+                <div className="text-red-600">{error}</div>
+              ) : blocks.length === 0 ? (
+                <p className="text-gray-500">No hay bloques de test disponibles</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {blocks.map((block) => (
+                    <div
+                      key={block.id}
+                      className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-[#91c26a] focus-within:ring-2 focus-within:ring-[#91c26a] focus-within:ring-offset-2"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{block.name}</p>
+                          <p className="text-sm text-gray-500 truncate">{block.description}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-32">
-                      <ProgressBar percentage={result.score} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Target className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No hay resultados</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Comienza tomando algunos tests para ver tus resultados aquí.
-                </p>
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#91c26a]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#91c26a] hover:bg-[#82b35b] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#91c26a]"
+              >
+                Crear Test
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

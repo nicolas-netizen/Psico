@@ -29,6 +29,7 @@ import AdminRoute from './components/auth/AdminRoute';
 import CustomTestCreator from './components/CustomTestCreator';
 import SolveTest from './components/SolveTest';
 import PlansPage from './pages/PlansPage';
+import TestReview from './components/TestReview';
 
 // Rutas protegidas
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
@@ -143,6 +144,16 @@ function App() {
                 <PrivateRoute>
                   <Layout>
                     <TestResultsPage />
+                  </Layout>
+                </PrivateRoute>
+              }
+            />
+            <Route 
+              path="/test-review/:testId" 
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <TestReview />
                   </Layout>
                 </PrivateRoute>
               }

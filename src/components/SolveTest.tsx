@@ -20,6 +20,7 @@ interface Test {
   questions: Question[];
   isTemporary?: boolean;
   userId: string;
+  timeLimit?: number;
 }
 
 const SolveTest = () => {
@@ -32,10 +33,30 @@ const SolveTest = () => {
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [startTime] = useState(new Date());
 
   useEffect(() => {
     loadTest();
   }, [testId]);
+
+  useEffect(() => {
+    if (test?.timeLimit) {
+      setTimeLeft(test.timeLimit);
+      const timer = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev === null || prev <= 0) {
+            clearInterval(timer);
+            handleSubmit();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [test]);
 
   const loadTest = async () => {
     if (!testId || !currentUser) return;
@@ -99,15 +120,20 @@ const SolveTest = () => {
     setSubmitting(true);
     try {
       const score = calculateScore();
+      const endTime = new Date();
+      const timeSpent = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
       
-      // Guardar solo el resultado
-      await addDoc(collection(db, 'testResults'), {
+      // Guardar el resultado
+      const resultRef = await addDoc(collection(db, 'testResults'), {
         userId: currentUser.uid,
+        testId: test.id,
         score,
         completedAt: new Date(),
         testType: 'custom',
         blocksUsed: location.state?.selectedBlocks || '',
-        questionsAnswered: test.questions.length
+        questionsAnswered: test.questions.length,
+        timeSpent,
+        answers: selectedAnswers
       });
 
       // Eliminar el test temporal
@@ -116,7 +142,7 @@ const SolveTest = () => {
       }
 
       toast.success('Test completado exitosamente');
-      navigate('/dashboard');
+      navigate(`/test-review/${test.id}`);
     } catch (error) {
       console.error('Error submitting test:', error);
       toast.error('Error al enviar el test');
@@ -146,6 +172,14 @@ const SolveTest = () => {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-md p-8">
+        {timeLeft !== null && (
+          <div className="mb-4 text-right">
+            <div className="text-2xl font-bold text-gray-900">
+              {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+            </div>
+            <div className="text-sm text-gray-500">Tiempo restante</div>
+          </div>
+        )}
         <div className="mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-900">

@@ -4,7 +4,7 @@ import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus, Minus } from 'lucide-react';
+import { Loader2, Plus, Minus, BookOpen, CheckCircle } from 'lucide-react';
 
 interface Question {
   id: string;
@@ -21,35 +21,37 @@ interface SelectedBlock {
 }
 
 const CustomTestCreator = () => {
-  console.log('CustomTestCreator component mounted');
-  
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedBlocks, setSelectedBlocks] = useState<SelectedBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const [selectedTime, setSelectedTime] = useState(30); // tiempo en minutos
+
+  const timeOptions = [
+    { value: 15, label: '15 minutos' },
+    { value: 30, label: '30 minutos' },
+    { value: 45, label: '45 minutos' },
+    { value: 60, label: 'Una hora' },
+    { value: 90, label: 'Hora y media' },
+    { value: 120, label: 'Dos horas' },
+  ];
 
   useEffect(() => {
-    console.log('CustomTestCreator useEffect running');
     loadQuestions();
   }, []);
 
   const loadQuestions = async () => {
-    console.log('loadQuestions started');
     setLoading(true);
     setError(null);
     try {
-      console.log('Loading questions...');
       const questionsRef = collection(db, 'questions');
-      console.log('questionsRef:', questionsRef);
       const querySnapshot = await getDocs(questionsRef);
-      console.log('Questions loaded:', querySnapshot.size);
       const questionsData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Question[];
-      console.log('questionsData:', questionsData);
       setQuestions(questionsData);
     } catch (error) {
       console.error('Error loading questions:', error);
@@ -59,8 +61,6 @@ const CustomTestCreator = () => {
       setLoading(false);
     }
   };
-
-  console.log('CustomTestCreator rendering, loading:', loading, 'error:', error);
 
   const blockNames = [...new Set(questions.filter(q => q.blockName).map(q => q.blockName))];
 
@@ -82,6 +82,10 @@ const CustomTestCreator = () => {
     });
   };
 
+  const getTotalQuestions = () => {
+    return selectedBlocks.reduce((total, block) => total + block.quantity, 0);
+  };
+
   const createAndStartTest = async () => {
     if (selectedBlocks.length === 0) {
       toast.error('Selecciona al menos un bloque de preguntas');
@@ -90,7 +94,6 @@ const CustomTestCreator = () => {
 
     setLoading(true);
     try {
-      // Recopilar preguntas seleccionadas de cada bloque
       const selectedQuestions: Question[] = [];
       
       for (const selected of selectedBlocks) {
@@ -104,7 +107,6 @@ const CustomTestCreator = () => {
         throw new Error('No se encontraron preguntas para los bloques seleccionados');
       }
 
-      // Crear test temporal
       const tempTest = {
         title: 'Test Personalizado',
         description: 'Test creado con bloques personalizados',
@@ -119,17 +121,12 @@ const CustomTestCreator = () => {
         type: 'temporary',
         status: 'active',
         isTemporary: true,
-        userId: currentUser?.uid
+        userId: currentUser?.uid,
+        timeLimit: selectedTime * 60, // convertir a segundos
       };
 
-      console.log('Creating temporary test:', tempTest);
-
-      // Guardar test temporal
       const testRef = await addDoc(collection(db, 'temporaryTests'), tempTest);
       
-      console.log('Test created with ID:', testRef.id);
-      
-      // Redirigir al usuario para resolver el test
       navigate(`/solve-test/${testRef.id}`, { 
         state: { 
           isTemporary: true,
@@ -146,7 +143,7 @@ const CustomTestCreator = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
         <Loader2 className="w-12 h-12 animate-spin text-[#91c26a]" />
         <p className="mt-4 text-gray-600">Cargando preguntas...</p>
       </div>
@@ -155,106 +152,157 @@ const CustomTestCreator = () => {
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-600 mb-4">{error}</p>
-        <button
-          onClick={loadQuestions}
-          className="px-4 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b]"
-        >
-          Intentar de nuevo
-        </button>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center max-w-md mx-auto p-8 bg-white rounded-lg shadow-md">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={loadQuestions}
+            className="px-4 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-all"
+          >
+            Intentar de nuevo
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Crear Test Personalizado</h2>
-          <p className="text-gray-600 mt-2">
-            Selecciona los bloques de preguntas que deseas practicar.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {blockNames.map((blockName) => {
-          const blockQuestions = questions.filter(q => q.blockName === blockName);
-          const selected = selectedBlocks.find(b => b.blockName === blockName);
-          
-          return (
-            <div key={blockName} 
-                 className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-              <h3 className="text-lg font-semibold mb-3">{blockName}</h3>
-              
-              <div className="flex flex-col space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">
-                    {blockQuestions.length} preguntas disponibles
-                  </span>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={() => handleBlockSelection(blockName, Math.max(0, (selected?.quantity || 0) - 1))}
-                    className="p-2 rounded-full hover:bg-gray-100 text-gray-600"
-                    disabled={!selected?.quantity}
-                  >
-                    <Minus size={20} />
-                  </button>
-
-                  <input
-                    type="number"
-                    min="0"
-                    max={blockQuestions.length}
-                    value={selected?.quantity || 0}
-                    onChange={(e) => handleBlockSelection(blockName, parseInt(e.target.value) || 0)}
-                    className="w-16 p-2 text-center border rounded-md"
-                  />
-
-                  <button
-                    onClick={() => handleBlockSelection(blockName, Math.min(blockQuestions.length, (selected?.quantity || 0) + 1))}
-                    className="p-2 rounded-full hover:bg-gray-100 text-gray-600"
-                    disabled={selected?.quantity === blockQuestions.length}
-                  >
-                    <Plus size={20} />
-                  </button>
-                </div>
-              </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="bg-white rounded-xl shadow-sm p-8 mb-8">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Crear Test Personalizado</h1>
+              <p className="text-gray-600">
+                Selecciona los bloques de preguntas y el tiempo límite para tu test
+              </p>
             </div>
-          );
-        })}
-      </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-[#91c26a]">{getTotalQuestions()}</div>
+              <div className="text-sm text-gray-500">Preguntas seleccionadas</div>
+            </div>
+          </div>
 
-      {blockNames.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <p className="text-gray-600">
-            No hay bloques de preguntas disponibles.
-          </p>
-          <p className="text-gray-500 text-sm mt-2">
-            El administrador debe crear preguntas y asignarlas a bloques.
-          </p>
-        </div>
-      )}
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Tiempo del Test</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {timeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setSelectedTime(option.value)}
+                  className={`p-3 rounded-lg text-center transition-all ${
+                    selectedTime === option.value
+                      ? 'bg-[#91c26a] text-white shadow-md'
+                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      <div className="flex justify-end">
-        <button
-          onClick={createAndStartTest}
-          disabled={loading || selectedBlocks.length === 0}
-          className="px-8 py-3 bg-[#91c26a] text-white rounded-lg font-semibold 
-                   hover:bg-[#82b35b] transition-colors disabled:opacity-50 
-                   disabled:cursor-not-allowed"
-        >
-          {loading ? (
-            <span className="flex items-center">
-              <Loader2 className="animate-spin mr-2" size={20} />
-              Creando test...
-            </span>
+          {blockNames.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {blockNames.map((blockName) => {
+                const blockQuestions = questions.filter(q => q.blockName === blockName);
+                const selected = selectedBlocks.find(b => b.blockName === blockName);
+                const isSelected = selected && selected.quantity > 0;
+                
+                return (
+                  <div 
+                    key={blockName} 
+                    className={`relative bg-white rounded-lg border-2 transition-all duration-200 ${
+                      isSelected ? 'border-[#91c26a] shadow-md' : 'border-gray-100 hover:border-gray-200'
+                    } p-6`}
+                  >
+                    {isSelected && (
+                      <div className="absolute top-4 right-4">
+                        <CheckCircle className="w-5 h-5 text-[#91c26a]" />
+                      </div>
+                    )}
+                    
+                    <div className="flex items-start space-x-4">
+                      <div className="bg-[#91c26a] bg-opacity-10 rounded-lg p-3">
+                        <BookOpen className="w-6 h-6 text-[#91c26a]" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{blockName}</h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                          {blockQuestions.length} preguntas disponibles
+                        </p>
+                        
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={() => handleBlockSelection(blockName, Math.max(0, (selected?.quantity || 0) - 1))}
+                            className={`p-2 rounded-lg transition-colors ${
+                              !selected?.quantity 
+                                ? 'text-gray-300 cursor-not-allowed' 
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                            disabled={!selected?.quantity}
+                          >
+                            <Minus size={20} />
+                          </button>
+
+                          <input
+                            type="number"
+                            min="0"
+                            max={blockQuestions.length}
+                            value={selected?.quantity || 0}
+                            onChange={(e) => handleBlockSelection(blockName, parseInt(e.target.value) || 0)}
+                            className="w-16 p-2 text-center border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+                          />
+
+                          <button
+                            onClick={() => handleBlockSelection(blockName, Math.min(blockQuestions.length, (selected?.quantity || 0) + 1))}
+                            className={`p-2 rounded-lg transition-colors ${
+                              selected?.quantity === blockQuestions.length 
+                                ? 'text-gray-300 cursor-not-allowed' 
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                            disabled={selected?.quantity === blockQuestions.length}
+                          >
+                            <Plus size={20} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
-            'Crear y Comenzar Test'
+            <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 font-medium">
+                No hay bloques de preguntas disponibles
+              </p>
+              <p className="text-gray-500 text-sm mt-2">
+                El administrador debe crear preguntas y asignarlas a bloques
+              </p>
+            </div>
           )}
-        </button>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            onClick={createAndStartTest}
+            disabled={loading || selectedBlocks.length === 0}
+            className="px-8 py-3 bg-[#91c26a] text-white rounded-lg font-semibold 
+                     hover:bg-[#82b35b] transition-all disabled:opacity-50 
+                     disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+          >
+            {loading ? (
+              <span className="flex items-center">
+                <Loader2 className="animate-spin mr-2" size={20} />
+                Creando test...
+              </span>
+            ) : (
+              'Crear y Comenzar Test'
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

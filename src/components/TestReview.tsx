@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -57,6 +57,14 @@ const TestReview = () => {
       }
 
       const testData = testDoc.data();
+      
+      // Verificar que el usuario actual es el dueño del test
+      if (testData.userId !== currentUser.uid) {
+        toast.error('No tienes permiso para ver este test');
+        navigate('/dashboard');
+        return;
+      }
+
       setTest(testData);
 
       // Cargar el resultado
@@ -101,6 +109,14 @@ const TestReview = () => {
         // Ordenar por rendimiento
         performance.sort((a, b) => b.percentage - a.percentage);
         setBlockPerformance(performance);
+
+        // Eliminar el test temporal ya que ya no lo necesitamos
+        try {
+          await deleteDoc(doc(db, 'temporaryTests', testId));
+        } catch (deleteError) {
+          console.error('Error deleting temporary test:', deleteError);
+          // No mostramos error al usuario ya que no afecta su experiencia
+        }
       }
     } catch (error) {
       console.error('Error loading test and result:', error);

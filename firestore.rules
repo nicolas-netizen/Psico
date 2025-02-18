@@ -92,7 +92,7 @@ service cloud.firestore {
     // Test results rules
     match /testResults/{resultId} {
       allow read: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || isAdmin()
+        request.auth.uid == resource.data.userId || isAdmin()
       );
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAuthenticated() && (

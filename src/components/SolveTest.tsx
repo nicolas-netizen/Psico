@@ -136,11 +136,6 @@ const SolveTest = () => {
         answers: selectedAnswers
       });
 
-      // Eliminar el test temporal
-      if (test.isTemporary) {
-        await deleteDoc(doc(db, 'temporaryTests', test.id));
-      }
-
       toast.success('Test completado exitosamente');
       navigate(`/test-review/${test.id}`);
     } catch (error) {

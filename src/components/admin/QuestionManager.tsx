@@ -8,6 +8,7 @@ interface Question {
   id: string;
   type: 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia';
   blockId?: string;
+  blockName?: string;
   text?: string;
   options?: string[];
   correctAnswer?: number;
@@ -28,7 +29,8 @@ const QuestionManager = () => {
     text: '',
     options: ['', '', '', ''],
     correctAnswer: 0,
-    isPublic: true
+    isPublic: true,
+    blockName: ''
   });
 
   useEffect(() => {
@@ -113,7 +115,8 @@ const QuestionManager = () => {
         text: '',
         options: ['', '', '', ''],
         correctAnswer: 0,
-        isPublic: true
+        isPublic: true,
+        blockName: ''
       });
     } catch (error) {
       console.error('Error adding question:', error);
@@ -142,7 +145,8 @@ const QuestionManager = () => {
       correctAnswer: 0,
       images: [],
       correctImageIndex: 0,
-      sequence: []
+      sequence: [],
+      blockName: ''
     }));
   };
 
@@ -176,21 +180,17 @@ const QuestionManager = () => {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Bloque
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nombre del Bloque
             </label>
-            <select
-              value={selectedBlock}
-              onChange={(e) => setSelectedBlock(e.target.value)}
-              className="w-full p-2 border rounded-lg"
-            >
-              {blocks.map(block => (
-                <option key={block.id} value={block.id}>
-                  {block.title}
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              value={newQuestion.blockName || ''}
+              onChange={(e) => setNewQuestion({ ...newQuestion, blockName: e.target.value })}
+              className="w-full p-2 border rounded-md focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+              placeholder="Ej: Bloque de Sinónimos Básicos"
+            />
           </div>
 
           {(selectedType === 'Texto' || selectedType === 'Distracción') && (

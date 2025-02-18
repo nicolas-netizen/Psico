@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, addDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
-import { Brain, Clock, Trophy, ChevronRight, Settings, Plus } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts';
+import { Brain, Clock, Trophy, ChevronRight, Plus, Calendar } from 'lucide-react';
+import { toast } from 'react-toastify';
+
+interface Plan {
+  name: string;
+  duration: number;
+  startDate: any;
+  customTestsEnabled?: boolean;
+}
+
+interface User {
+  plan?: string;
+  planStartDate?: any;
+}
 
 interface Test {
   id: string;
@@ -30,6 +30,9 @@ interface Test {
     memorizeTime: number;
     distractionTime: number;
   };
+  type?: string;
+  userId?: string;
+  createdAt?: any;
 }
 
 interface TestResult {
@@ -51,6 +54,13 @@ const COLORS = ['#91c26a', '#fbbf24', '#ef4444'];
 const Dashboard = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const [userPlan, setUserPlan] = useState<{
+    name: string;
+    expiresAt: any;
+    purchasedAt: any;
+    customTestsEnabled?: boolean;
+  } | null>(null);
+  const [daysLeft, setDaysLeft] = useState<number>(0);
   const [availableTests, setAvailableTests] = useState<Test[]>([]);
   const [userResults, setUserResults] = useState<TestResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,74 +91,56 @@ const Dashboard = () => {
 
         // Verificar el plan del usuario
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (!userDoc.exists()) {
-          console.log('Usuario no encontrado en Firestore');
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.planId) {
+            // Obtener los detalles del plan
+            const planDoc = await getDoc(doc(db, 'plans', userData.planId));
+            const planData = planDoc.data();
+            
+            setUserPlan({
+              name: userData.planName,
+              expiresAt: userData.planExpiresAt,
+              purchasedAt: userData.planPurchasedAt,
+              customTestsEnabled: planData?.customTestsEnabled || false
+            });
+
+            // Calcular días restantes
+            if (userData.planExpiresAt) {
+              const expiresAt = userData.planExpiresAt.toDate();
+              const now = new Date();
+              const diffTime = expiresAt.getTime() - now.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              setDaysLeft(diffDays);
+            }
+
+            // Cargar tests disponibles
+            const testsQuery = query(
+              collection(db, 'tests'),
+              where('isPublic', '==', true)
+            );
+            const testsSnapshot = await getDocs(testsQuery);
+            const testsData = testsSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            })) as Test[];
+            setAvailableTests(testsData);
+          }
         }
 
-        // Obtener tests públicos y personalizados del usuario
-        const testsQuery = query(
-          collection(db, 'tests'),
-          where('isPublic', '==', true)
-        );
-        const userTestsQuery = query(
-          collection(db, 'tests'),
-          where('createdBy', '==', currentUser.uid)
-        );
-
-        const [publicTestsSnapshot, userTestsSnapshot] = await Promise.all([
-          getDocs(testsQuery),
-          getDocs(userTestsQuery)
-        ]);
-
-        console.log('Tests públicos encontrados:', publicTestsSnapshot.size);
-        console.log('Tests del usuario encontrados:', userTestsSnapshot.size);
-
-        const tests = [
-          ...publicTestsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            isPublic: true
-          })),
-          ...userTestsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            isPublic: false
-          }))
-        ] as Test[];
-
-        setAvailableTests(tests);
-
-        // Obtener resultados del usuario
+        // Cargar resultados del usuario
         const resultsQuery = query(
           collection(db, 'testResults'),
           where('userId', '==', currentUser.uid),
           orderBy('completedAt', 'desc')
         );
-        
         const resultsSnapshot = await getDocs(resultsQuery);
-        console.log('Resultados encontrados:', resultsSnapshot.size);
+        const resultsData = resultsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as TestResult[];
+        setUserResults(resultsData);
 
-        const results = await Promise.all(
-          resultsSnapshot.docs.map(async doc => {
-            const resultData = doc.data();
-            let testTitle = 'Test no encontrado';
-            
-            if (resultData.testId) {
-              const testDoc = await getDoc(doc(db, 'tests', resultData.testId));
-              if (testDoc.exists()) {
-                testTitle = testDoc.data().title;
-              }
-            }
-            
-            return {
-              id: doc.id,
-              ...resultData,
-              testTitle
-            };
-          })
-        ) as TestResult[];
-        
-        setUserResults(results);
       } catch (error) {
         console.error('Error fetching data:', error);
         toast.error('Error al cargar los datos');
@@ -159,6 +151,15 @@ const Dashboard = () => {
 
     fetchData();
   }, [currentUser, navigate]);
+
+  const handleCreateCustomTest = () => {
+    if (!userPlan?.customTestsEnabled) {
+      toast.error('Tu plan actual no incluye la creación de tests personalizados. Actualiza tu plan para acceder a esta función.');
+      navigate('/plans');
+      return;
+    }
+    setShowCustomizeModal(true);
+  };
 
   const handleStartTest = (testId: string) => {
     navigate(`/test/${testId}`);
@@ -183,7 +184,7 @@ const Dashboard = () => {
     }));
   };
 
-  const handleCreateCustomTest = async () => {
+  const handleCreateCustomTestSubmit = async () => {
     try {
       if (customTest.blocks.length === 0) {
         toast.error('Debes agregar al menos un bloque al test');
@@ -195,30 +196,12 @@ const Dashboard = () => {
         return;
       }
 
-      // Verificar si el usuario tiene acceso a tests personalizados
-      const userDoc = await getDoc(doc(db, 'users', currentUser!.uid));
-      if (!userDoc.exists()) {
-        toast.error('Usuario no encontrado');
-        return;
-      }
-
-      const userData = userDoc.data();
-      if (!userData.planId) {
-        toast.error('Necesitas un plan para crear tests personalizados');
-        return;
-      }
-
-      const planDoc = await getDoc(doc(db, 'plans', userData.planId));
-      if (!planDoc.exists() || !planDoc.data().hasCustomTest) {
-        toast.error('Tu plan no incluye la creación de tests personalizados');
-        return;
-      }
-
       const newTest = {
         ...customTest,
         createdBy: currentUser!.uid,
         createdAt: new Date(),
-        updatedAt: new Date()
+        type: 'custom',
+        userId: currentUser!.uid
       };
 
       const testRef = await addDoc(collection(db, 'tests'), newTest);
@@ -264,91 +247,249 @@ const Dashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-8 flex justify-between items-center">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900">
             Bienvenido, {currentUser?.email}
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-1 text-sm text-gray-600">
             Aquí puedes ver tus estadísticas, tests disponibles y crear tests personalizados.
           </p>
         </div>
-        <div className="flex gap-4">
+
+        {userPlan && (
+          <div className="mt-4 md:mt-0 bg-white rounded-lg shadow-sm p-4 flex items-center space-x-4">
+            <div className="bg-[#91c26a] bg-opacity-10 p-2 rounded-full">
+              <Calendar className="h-6 w-6 text-[#91c26a]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">{userPlan.name}</p>
+              <p className="text-xs text-gray-500">
+                {daysLeft} días restantes
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
+        <div className="flex flex-wrap gap-4">
           <button
-            onClick={() => setShowCustomizeModal(true)}
-            className="flex items-center px-4 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors"
+            onClick={handleCreateCustomTest}
+            className={`flex items-center px-6 py-3 ${userPlan?.customTestsEnabled 
+              ? 'bg-[#91c26a] text-white hover:bg-[#82b35b]' 
+              : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
           >
-            <Plus className="w-5 h-5 mr-2" />
-            Crear Test Personalizado
+            <Plus className="h-5 w-5 mr-2" />
+            <span>Crear Test Personalizado</span>
           </button>
+          
           <button
-            onClick={handleStartRandomTest}
-            className="px-4 py-2 border border-[#91c26a] text-[#91c26a] rounded-lg hover:bg-[#f0f7eb] transition-colors"
+            onClick={() => navigate('/test/random')}
+            className="flex items-center px-6 py-3 border border-[#91c26a] text-[#91c26a] 
+                     rounded-lg hover:bg-[#91c26a] hover:text-white transition-colors
+                     shadow-sm hover:shadow-md"
           >
-            Test Aleatorio
+            <Brain className="h-5 w-5 mr-2" />
+            <span>Test Aleatorio</span>
           </button>
         </div>
       </div>
 
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Progreso Reciente</h2>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={progressData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#91c26a"
-                  strokeWidth={2}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center">
+            <div className="bg-[#91c26a] bg-opacity-10 p-3 rounded-full">
+              <Trophy className="h-6 w-6 text-[#91c26a]" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Puntuación Media</p>
+              <p className="text-2xl font-semibold text-gray-900">85%</p>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Distribución de Rendimiento</h2>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={performanceData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {performanceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex justify-center gap-4 mt-4">
-              {performanceData.map((entry, index) => (
-                <div key={entry.name} className="flex items-center">
-                  <div
-                    className="w-3 h-3 rounded-full mr-2"
-                    style={{ backgroundColor: COLORS[index] }}
-                  />
-                  <span className="text-sm text-gray-600">
-                    {entry.name} ({entry.value})
-                  </span>
-                </div>
-              ))}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center">
+            <div className="bg-[#91c26a] bg-opacity-10 p-3 rounded-full">
+              <Brain className="h-6 w-6 text-[#91c26a]" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Tests Completados</p>
+              <p className="text-2xl font-semibold text-gray-900">12</p>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center">
+            <div className="bg-[#91c26a] bg-opacity-10 p-3 rounded-full">
+              <Clock className="h-6 w-6 text-[#91c26a]" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Tiempo de Estudio</p>
+              <p className="text-2xl font-semibold text-gray-900">8h 30m</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Progreso Reciente
+          </h3>
+          <div className="h-64 w-full bg-gradient-to-b from-[#91c26a20] to-transparent rounded-lg p-4">
+            {/* Gráfico de ejemplo */}
+            <div className="relative h-full">
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gray-200" />
+              <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200" />
+              
+              {/* Línea de progreso */}
+              <svg className="absolute inset-0" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <path
+                  d="M0,50 L20,45 L40,60 L60,30 L80,40 L100,20"
+                  fill="none"
+                  stroke="#91c26a"
+                  strokeWidth="2"
+                />
+              </svg>
+              
+              {/* Puntos de datos */}
+              <div className="absolute bottom-[45%] left-[20%] w-2 h-2 bg-[#91c26a] rounded-full" />
+              <div className="absolute bottom-[60%] left-[40%] w-2 h-2 bg-[#91c26a] rounded-full" />
+              <div className="absolute bottom-[30%] left-[60%] w-2 h-2 bg-[#91c26a] rounded-full" />
+              <div className="absolute bottom-[40%] left-[80%] w-2 h-2 bg-[#91c26a] rounded-full" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Distribución de Rendimiento
+          </h3>
+          <div className="h-64 flex items-center justify-center">
+            {/* Gráfico circular de ejemplo */}
+            <div className="relative w-48 h-48">
+              <svg className="w-full h-full" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="none"
+                  stroke="#eee"
+                  strokeWidth="10"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="none"
+                  stroke="#91c26a"
+                  strokeWidth="10"
+                  strokeDasharray="220"
+                  strokeDashoffset="66"
+                  transform="rotate(-90 50 50)"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="none"
+                  stroke="#fbbf24"
+                  strokeWidth="10"
+                  strokeDasharray="220"
+                  strokeDashoffset="176"
+                  transform="rotate(-90 50 50)"
+                />
+              </svg>
+              {/* Leyenda */}
+              <div className="absolute -bottom-16 left-0 right-0">
+                <div className="flex justify-center space-x-4 text-sm">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-[#91c26a] rounded-full mr-1"></div>
+                    <span>Excelente (70%)</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-[#fbbf24] rounded-full mr-1"></div>
+                    <span>Regular (30%)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Plan Information */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Tu Plan Actual</h3>
+          <button
+            onClick={() => navigate('/plans')}
+            className="text-[#91c26a] hover:text-[#82b35b] font-medium text-sm"
+          >
+            Ver planes disponibles
+          </button>
+        </div>
+
+        {userPlan ? (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h4 className="text-xl font-bold text-gray-900">{userPlan.name}</h4>
+                <p className="text-gray-600 mt-1">
+                  {daysLeft} días restantes
+                </p>
+              </div>
+              <div className="bg-[#f1f7ed] text-[#91c26a] px-3 py-1 rounded-full text-sm font-medium">
+                Activo
+              </div>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-[#91c26a] h-2 rounded-full"
+                style={{
+                  width: `${Math.min(100, (daysLeft / 30) * 100)}%`
+                }}
+              ></div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p className="text-gray-600 mb-4">
+              No tienes ningún plan activo.
+            </p>
+            <button
+              onClick={() => navigate('/plans')}
+              className="mt-4 px-6 py-2 bg-[#91c26a] text-white rounded-lg 
+                       hover:bg-[#82b35b] transition-colors"
+            >
+              Ver planes disponibles
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Recent Tests Section */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-gray-900">Tests Recientes</h3>
+          <button
+            onClick={() => navigate('/tests')}
+            className="text-sm text-[#91c26a] hover:text-[#82b35b] font-medium"
+          >
+            Ver todos
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Test cards would go here */}
         </div>
       </div>
 
@@ -511,7 +652,7 @@ const Dashboard = () => {
                 Cancelar
               </button>
               <button
-                onClick={handleCreateCustomTest}
+                onClick={handleCreateCustomTestSubmit}
                 className="px-4 py-2 bg-[#91c26a] text-white rounded-md hover:bg-[#82b35b]"
               >
                 Crear Test

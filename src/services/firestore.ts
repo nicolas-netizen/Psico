@@ -23,6 +23,7 @@ export interface Plan {
   features: string[];
   isFeatured?: boolean;
   hasCustomTest?: boolean;
+  customTestsEnabled?: boolean;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -945,51 +946,99 @@ export const createInitialQuestions = async () => {
 export const createInitialPlans = async () => {
   try {
     const plansRef = collection(db, 'plans');
-    const querySnapshot = await getDocs(plansRef);
-    
-    if (querySnapshot.empty) {
-      const plans = [
-        {
-          name: 'Free',
-          description: 'Plan gratuito con funcionalidades básicas',
-          price: 0,
-          features: [
-            'Acceso a tests básicos',
-            'Resultados básicos',
-            'Soporte por email'
-          ],
-          hasCustomTest: false,
-          isFeatured: false,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
-        },
-        {
-          name: 'Premium',
-          description: 'Plan premium con todas las funcionalidades',
-          price: 19.99,
-          features: [
-            'Acceso a todos los tests',
-            'Tests personalizados',
-            'Resultados detallados',
-            'Soporte prioritario',
-            'Sin anuncios'
-          ],
-          hasCustomTest: true,
-          isFeatured: true,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
-        }
-      ];
+    const plansSnapshot = await getDocs(plansRef);
 
-      for (const plan of plans) {
-        await addDoc(plansRef, plan);
-      }
+    if (plansSnapshot.empty) {
+      // Plan Básico
+      await addDoc(plansRef, {
+        name: 'Plan Básico',
+        description: 'Ideal para comenzar tu preparación',
+        price: 1999,
+        duration: 30, // días
+        features: [
+          'Acceso a tests básicos',
+          'Estadísticas de rendimiento',
+          'Soporte por email',
+          'Validez por 30 días'
+        ],
+        isFeatured: false,
+        customTestsEnabled: false,
+        createdAt: Timestamp.now()
+      });
 
-      console.log('Initial plans created successfully');
+      // Plan Profesional
+      await addDoc(plansRef, {
+        name: 'Plan Profesional',
+        description: 'La mejor opción para profesionales',
+        price: 3999,
+        duration: 90, // días
+        features: [
+          'Acceso a todos los tests',
+          'Tests personalizados ilimitados',
+          'Estadísticas avanzadas',
+          'Soporte prioritario',
+          'Validez por 90 días',
+          'Recursos descargables'
+        ],
+        isFeatured: true,
+        customTestsEnabled: true,
+        createdAt: Timestamp.now()
+      });
+
+      // Plan Premium
+      await addDoc(plansRef, {
+        name: 'Plan Premium',
+        description: 'Preparación completa y personalizada',
+        price: 5999,
+        duration: 180, // días
+        features: [
+          'Todo lo incluido en el Plan Profesional',
+          'Sesiones de mentoría personal',
+          'Contenido exclusivo',
+          'Validez por 180 días',
+          'Garantía de satisfacción'
+        ],
+        isFeatured: false,
+        customTestsEnabled: true,
+        createdAt: Timestamp.now()
+      });
+
+      console.log('Planes iniciales creados exitosamente');
     }
   } catch (error) {
     console.error('Error creating initial plans:', error);
-    throw new Error('Error al crear los planes iniciales');
+  }
+};
+
+export const updateExistingPlans = async () => {
+  try {
+    const plansRef = collection(db, 'plans');
+    const plansSnapshot = await getDocs(plansRef);
+
+    const updatePromises = plansSnapshot.docs.map(async (doc) => {
+      const planData = doc.data();
+      
+      // Solo actualizar si el campo no existe
+      if (planData.customTestsEnabled === undefined) {
+        // Plan Básico no tiene tests personalizados
+        if (planData.price === 1999) {
+          await updateDoc(doc.ref, {
+            customTestsEnabled: false
+          });
+        } 
+        // Plan Profesional y Premium sí tienen tests personalizados
+        else {
+          await updateDoc(doc.ref, {
+            customTestsEnabled: true
+          });
+        }
+      }
+    });
+
+    await Promise.all(updatePromises);
+    console.log('Planes existentes actualizados exitosamente');
+  } catch (error) {
+    console.error('Error updating existing plans:', error);
   }
 };
 
@@ -1068,16 +1117,16 @@ export const createInitialDiscountCodes = async () => {
 // Purchase plan
 export const purchasePlan = async (userId: string, planId: string, discountCode?: string) => {
   try {
-    let finalPrice = 0;
-    let discount = 0;
-
     // Get plan details
     const planDoc = await getDoc(doc(db, 'plans', planId));
     if (!planDoc.exists()) {
       throw new Error('Plan no encontrado');
     }
     const plan = planDoc.data();
-    finalPrice = plan.price;
+
+    // Calculate final price
+    let finalPrice = plan.price;
+    let discount = 0;
 
     // Apply discount if code is valid
     if (discountCode) {
@@ -1085,17 +1134,40 @@ export const purchasePlan = async (userId: string, planId: string, discountCode?
       finalPrice = finalPrice * (1 - discount / 100);
     }
 
-    // Update user's plan
+    // Calculate expiration date
+    const durationInDays = plan.duration || 30;
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() + durationInDays);
+
+    // Get user document
     const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, {
+    const userDoc = await getDoc(userRef);
+
+    const planData = {
       planId,
       planName: plan.name,
       planPrice: finalPrice,
       discountApplied: discount,
       planPurchasedAt: Timestamp.now(),
-      planExpiresAt: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // 30 days
+      planExpiresAt: Timestamp.fromDate(expirationDate),
       updatedAt: Timestamp.now()
-    });
+    };
+
+    // Save user data
+    if (!userDoc.exists()) {
+      // Create new user document
+      await setDoc(userRef, {
+        ...planData,
+        email: (await getDoc(doc(db, 'users', userId))).data()?.email || '',
+        createdAt: Timestamp.now(),
+        role: 'user',
+        testResults: [],
+        customTests: []
+      });
+    } else {
+      // Update existing user
+      await updateDoc(userRef, planData);
+    }
 
     // Create purchase record
     await addDoc(collection(db, 'purchases'), {
@@ -1106,14 +1178,17 @@ export const purchasePlan = async (userId: string, planId: string, discountCode?
       discountCode: discountCode || null,
       discountPercentage: discount,
       finalPrice,
-      purchasedAt: Timestamp.now()
+      purchasedAt: Timestamp.now(),
+      expiresAt: Timestamp.fromDate(expirationDate)
     });
 
+    // Return success response
     return {
       success: true,
       planName: plan.name,
       finalPrice,
-      discountApplied: discount
+      discountApplied: discount,
+      expiresAt: expirationDate
     };
   } catch (error) {
     console.error('Error purchasing plan:', error);

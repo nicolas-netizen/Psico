@@ -11,7 +11,9 @@ import {
   orderBy,
   limit,
   Timestamp,
-  setDoc
+  setDoc,
+  writeBatch,
+  deleteField
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 
@@ -1015,30 +1017,25 @@ export const updateExistingPlans = async () => {
     const plansRef = collection(db, 'plans');
     const plansSnapshot = await getDocs(plansRef);
 
-    const updatePromises = plansSnapshot.docs.map(async (doc) => {
-      const planData = doc.data();
-      
-      // Solo actualizar si el campo no existe
-      if (planData.customTestsEnabled === undefined) {
-        // Plan Básico no tiene tests personalizados
-        if (planData.price === 1999) {
-          await updateDoc(doc.ref, {
-            customTestsEnabled: false
-          });
-        } 
-        // Plan Profesional y Premium sí tienen tests personalizados
-        else {
-          await updateDoc(doc.ref, {
-            customTestsEnabled: true
-          });
-        }
+    const batch = writeBatch(db);
+
+    plansSnapshot.docs.forEach((planDoc) => {
+      const planData = planDoc.data();
+      // Si existe hasCustomTest, lo migramos a customTestsEnabled
+      if ('hasCustomTest' in planData) {
+        batch.update(planDoc.ref, {
+          customTestsEnabled: planData.hasCustomTest,
+          // Eliminar el campo antiguo
+          hasCustomTest: deleteField()
+        });
       }
     });
 
-    await Promise.all(updatePromises);
-    console.log('Planes existentes actualizados exitosamente');
+    await batch.commit();
+    console.log('Planes actualizados exitosamente');
   } catch (error) {
-    console.error('Error updating existing plans:', error);
+    console.error('Error al actualizar los planes:', error);
+    throw error;
   }
 };
 

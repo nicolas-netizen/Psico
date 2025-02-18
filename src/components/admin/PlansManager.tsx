@@ -8,7 +8,7 @@ interface PlanFormData {
   price: number;
   features: string[];
   isFeatured: boolean;
-  hasCustomTest: boolean;
+  customTestsEnabled: boolean;
 }
 
 const PlansManager: React.FC = () => {
@@ -21,7 +21,7 @@ const PlansManager: React.FC = () => {
     price: 0,
     features: [''],
     isFeatured: false,
-    hasCustomTest: false,
+    customTestsEnabled: false,
   });
 
   useEffect(() => {
@@ -78,7 +78,7 @@ const PlansManager: React.FC = () => {
       price: 0,
       features: [''],
       isFeatured: false,
-      hasCustomTest: false,
+      customTestsEnabled: false,
     });
     setEditingPlan(null);
   };
@@ -131,8 +131,8 @@ const PlansManager: React.FC = () => {
           <label className="flex items-center space-x-2">
             <input
               type="checkbox"
-              checked={formData.hasCustomTest}
-              onChange={(e) => setFormData({ ...formData, hasCustomTest: e.target.checked })}
+              checked={formData.customTestsEnabled}
+              onChange={(e) => setFormData({ ...formData, customTestsEnabled: e.target.checked })}
               className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             />
             <span className="text-sm font-medium text-gray-700">Incluye Test Personalizado</span>
@@ -238,7 +238,7 @@ const PlansManager: React.FC = () => {
                       price: plan.price,
                       features: plan.features,
                       isFeatured: plan.isFeatured || false,
-                      hasCustomTest: plan.hasCustomTest || false,
+                      customTestsEnabled: plan.hasCustomTest || false,
                     });
                   }}
                   className="text-indigo-600 hover:text-indigo-900"

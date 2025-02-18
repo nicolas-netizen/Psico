@@ -98,7 +98,17 @@ const Dashboard = () => {
             const planDoc = await getDoc(doc(db, 'plans', userData.planId));
             const planData = planDoc.data();
             
+            console.log('Plan Data:', planData);
+            console.log('customTestsEnabled:', planData?.customTestsEnabled);
+            
             setUserPlan({
+              name: userData.planName,
+              expiresAt: userData.planExpiresAt,
+              purchasedAt: userData.planPurchasedAt,
+              customTestsEnabled: planData?.customTestsEnabled || false
+            });
+
+            console.log('User Plan State:', {
               name: userData.planName,
               expiresAt: userData.planExpiresAt,
               purchasedAt: userData.planPurchasedAt,
@@ -113,33 +123,51 @@ const Dashboard = () => {
               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
               setDaysLeft(diffDays);
             }
-
-            // Cargar tests disponibles
-            const testsQuery = query(
-              collection(db, 'tests'),
-              where('isPublic', '==', true)
-            );
-            const testsSnapshot = await getDocs(testsQuery);
-            const testsData = testsSnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            })) as Test[];
-            setAvailableTests(testsData);
           }
         }
 
-        // Cargar resultados del usuario
-        const resultsQuery = query(
-          collection(db, 'testResults'),
-          where('userId', '==', currentUser.uid),
-          orderBy('completedAt', 'desc')
-        );
-        const resultsSnapshot = await getDocs(resultsQuery);
-        const resultsData = resultsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as TestResult[];
-        setUserResults(resultsData);
+        try {
+          // Cargar tests disponibles
+          const testsQuery = query(
+            collection(db, 'tests'),
+            where('isPublic', '==', true)
+          );
+          const testsSnapshot = await getDocs(testsQuery);
+          const testsData = testsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as Test[];
+          setAvailableTests(testsData);
+        } catch (error) {
+          console.error('Error al cargar los tests:', error);
+          toast.error('Error al cargar los tests disponibles');
+        }
+
+        try {
+          // Primero intentamos obtener solo los resultados filtrados por userId
+          const resultsQuery = query(
+            collection(db, 'testResults'),
+            where('userId', '==', currentUser.uid)
+          );
+          const resultsSnapshot = await getDocs(resultsQuery);
+          
+          // Ordenamos los resultados en memoria
+          const resultsData = resultsSnapshot.docs
+            .map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }))
+            .sort((a: any, b: any) => {
+              const dateA = a.completedAt?.toDate?.() || new Date(0);
+              const dateB = b.completedAt?.toDate?.() || new Date(0);
+              return dateB.getTime() - dateA.getTime();
+            }) as TestResult[];
+            
+          setUserResults(resultsData);
+        } catch (error: any) {
+          console.error('Error completo de Firebase:', error);
+          toast.error(`Error al cargar resultados: ${error.message}`);
+        }
 
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -158,7 +186,7 @@ const Dashboard = () => {
       navigate('/plans');
       return;
     }
-    setShowCustomizeModal(true);
+    navigate('/custom-test-creator');
   };
 
   const handleStartTest = (testId: string) => {
@@ -279,22 +307,25 @@ const Dashboard = () => {
         <div className="flex flex-wrap gap-4">
           <button
             onClick={handleCreateCustomTest}
-            className={`flex items-center px-6 py-3 ${userPlan?.customTestsEnabled 
-              ? 'bg-[#91c26a] text-white hover:bg-[#82b35b]' 
-              : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+            className={`flex items-center px-6 py-3 rounded-lg transition-colors shadow-sm hover:shadow-md ${
+              userPlan?.customTestsEnabled === true 
+                ? 'bg-[#91c26a] text-white hover:bg-[#82b35b]' 
+                : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+            }`}
+            disabled={!userPlan?.customTestsEnabled}
           >
             <Plus className="h-5 w-5 mr-2" />
             <span>Crear Test Personalizado</span>
+            {!userPlan?.customTestsEnabled && (
+              <span className="ml-2 text-xs">(Requiere plan premium)</span>
+            )}
           </button>
           
           <button
             onClick={() => navigate('/test/random')}
-            className="flex items-center px-6 py-3 border border-[#91c26a] text-[#91c26a] 
-                     rounded-lg hover:bg-[#91c26a] hover:text-white transition-colors
-                     shadow-sm hover:shadow-md"
+            className="text-[#91c26a] hover:text-[#82b35b] font-medium text-sm"
           >
-            <Brain className="h-5 w-5 mr-2" />
-            <span>Test Aleatorio</span>
+            Test Aleatorio
           </button>
         </div>
       </div>

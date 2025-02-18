@@ -167,6 +167,16 @@ function App() {
                 </PrivateRoute>
               }
             />
+            <Route 
+              path="/custom-test-creator" 
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <CustomTestCreator />
+                  </Layout>
+                </PrivateRoute>
+              }
+            />
           </Routes>
         </Router>
       </AuthProvider>

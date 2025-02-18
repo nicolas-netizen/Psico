@@ -1,14 +1,15 @@
 import { db } from '../firebase/firebaseConfig';
-import { collection, doc, getDoc, addDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, addDoc, getDocs, Timestamp, updateDoc, deleteDoc } from 'firebase/firestore';
+import { generateRandomImages } from '../utils/imageUtils';
 
-export interface Question {
+interface Question {
   id: string;
   text: string;
   options: string[];
   correctAnswer: string;
 }
 
-export interface Test {
+interface Test {
   id: string;
   name: string;
   description: string;
@@ -16,11 +17,33 @@ export interface Test {
   questions: Question[];
 }
 
-export interface TestSubmission {
+interface TestSubmission {
   testId: string;
   userId: string;
   answers: Record<string, string>;
   score: number;
+}
+
+interface TestQuestion {
+  type: 'memory' | 'text';
+  images?: string[];
+  question: string;
+  options: string[];
+  correctAnswer: number;
+}
+
+interface Test {
+  id?: string;
+  title: string;
+  description: string;
+  timeLimit: number;
+  isPublic: boolean;
+  blocks: number;
+  imagesPerBlock: number;
+  memorizeTime: number;
+  distractionTime: number;
+  questions?: TestQuestion[];
+  createdAt?: any;
 }
 
 const validateQuestion = (question: any, index: number): Question => {
@@ -124,46 +147,45 @@ export const testService = {
 
   getTestById: async (testId: string): Promise<Test> => {
     try {
-      const testRef = doc(db, 'tests', testId);
-      const testDoc = await getDoc(testRef);
-      
+      const testDoc = await getDoc(doc(db, 'tests', testId));
       if (!testDoc.exists()) {
         throw new Error('Test no encontrado');
       }
 
-      const testData = testDoc.data();
-      console.log('Datos crudos del test:', JSON.stringify(testData, null, 2));
-      
-      if (!testData) {
-        throw new Error('Datos del test no válidos');
-      }
+      const testData = testDoc.data() as Test;
+      console.log('Datos crudos del test:', testData);
 
-      if (!Array.isArray(testData.questions)) {
-        console.error('Estructura de preguntas inválida:', JSON.stringify(testData.questions, null, 2));
-        throw new Error('El test no contiene preguntas válidas');
-      }
-
-      // Validar y normalizar cada pregunta
-      const questions = testData.questions.map((q: any, index: number) => {
-        try {
-          console.log(`Procesando pregunta ${index + 1}:`, JSON.stringify(q, null, 2));
-          return validateQuestion(q, index);
-        } catch (error) {
-          console.error(`Error al validar pregunta ${index + 1}:`, JSON.stringify(q, null, 2));
-          throw error;
+      // Si el test no tiene preguntas, las generamos
+      if (!testData.questions || testData.questions.length === 0) {
+        const questions: TestQuestion[] = [];
+        
+        // Generar preguntas para cada bloque
+        for (let block = 0; block < testData.blocks; block++) {
+          const images = await generateRandomImages(testData.imagesPerBlock);
+          const correctImageIndex = Math.floor(Math.random() * images.length);
+          
+          // Pregunta de memoria
+          questions.push({
+            type: 'memory',
+            images: images,
+            question: '¿Qué imagen estaba presente en el conjunto anterior?',
+            options: images,
+            correctAnswer: correctImageIndex
+          });
         }
-      });
 
-      const test: Test = {
+        // Actualizar el test con las preguntas generadas
+        await updateDoc(doc(db, 'tests', testId), {
+          questions: questions
+        });
+
+        testData.questions = questions;
+      }
+
+      return {
         id: testDoc.id,
-        name: testData.name || 'Test sin nombre',
-        description: testData.description || 'Sin descripción',
-        timeLimit: typeof testData.timeLimit === 'number' ? testData.timeLimit : 30,
-        questions: questions
+        ...testData
       };
-
-      console.log('Test procesado:', JSON.stringify(test, null, 2));
-      return test;
     } catch (error) {
       console.error('Error al obtener el test:', error);
       throw error;
@@ -193,6 +215,90 @@ export const testService = {
       return result.id;
     } catch (error) {
       console.error('Error al enviar el test:', error);
+      throw error;
+    }
+  },
+
+  getTestByIdNew: async (testId: string): Promise<Test> => {
+    try {
+      const testDoc = await getDoc(doc(db, 'tests', testId));
+      if (!testDoc.exists()) {
+        throw new Error('Test no encontrado');
+      }
+
+      const testData = testDoc.data() as Test;
+      console.log('Datos crudos del test:', testData);
+
+      // Si el test no tiene preguntas, las generamos
+      if (!testData.questions || testData.questions.length === 0) {
+        const questions: TestQuestion[] = [];
+        
+        // Generar preguntas para cada bloque
+        for (let block = 0; block < testData.blocks; block++) {
+          const images = generateRandomImages(testData.imagesPerBlock);
+          const correctImageIndex = Math.floor(Math.random() * images.length);
+          
+          // Pregunta de memoria
+          questions.push({
+            type: 'memory',
+            images: images,
+            question: '¿Qué imagen estaba presente en el conjunto anterior?',
+            options: images,
+            correctAnswer: correctImageIndex
+          });
+        }
+
+        // Actualizar el test con las preguntas generadas
+        await updateDoc(doc(db, 'tests', testId), {
+          questions: questions
+        });
+
+        testData.questions = questions;
+      }
+
+      return {
+        id: testDoc.id,
+        ...testData
+      };
+    } catch (error) {
+      console.error('Error al obtener el test:', error);
+      throw error;
+    }
+  },
+
+  createTest: async (testData: Omit<Test, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+      const newTest = {
+        ...testData,
+        createdAt: Timestamp.now(),
+        questions: [] // Las preguntas se generarán cuando se acceda al test
+      };
+
+      const docRef = await addDoc(collection(db, 'tests'), newTest);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error al crear el test:', error);
+      throw error;
+    }
+  },
+
+  updateTest: async (testId: string, testData: Partial<Test>): Promise<void> => {
+    try {
+      await updateDoc(doc(db, 'tests', testId), {
+        ...testData,
+        updatedAt: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error al actualizar el test:', error);
+      throw error;
+    }
+  },
+
+  deleteTest: async (testId: string): Promise<void> => {
+    try {
+      await deleteDoc(doc(db, 'tests', testId));
+    } catch (error) {
+      console.error('Error al eliminar el test:', error);
       throw error;
     }
   },

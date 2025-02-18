@@ -86,6 +86,16 @@ const CustomTestCreator = () => {
     return selectedBlocks.reduce((total, block) => total + block.quantity, 0);
   };
 
+  // Función para mezclar array usando Fisher-Yates
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
   const createAndStartTest = async () => {
     if (selectedBlocks.length === 0) {
       toast.error('Selecciona al menos un bloque de preguntas');
@@ -98,24 +108,34 @@ const CustomTestCreator = () => {
       
       for (const selected of selectedBlocks) {
         const blockQuestions = questions.filter(q => q.blockName === selected.blockName);
-        const shuffled = [...blockQuestions].sort(() => 0.5 - Math.random());
+        
+        if (blockQuestions.length < selected.quantity) {
+          toast.error(`No hay suficientes preguntas disponibles en el bloque "${selected.blockName}"`);
+          return;
+        }
+
+        const shuffled = shuffleArray(blockQuestions);
         const selectedFromBlock = shuffled.slice(0, selected.quantity);
         selectedQuestions.push(...selectedFromBlock);
       }
 
-      if (selectedQuestions.length === 0) {
+      // Mezclar también el orden final de las preguntas
+      const finalQuestions = shuffleArray(selectedQuestions);
+
+      if (finalQuestions.length === 0) {
         throw new Error('No se encontraron preguntas para los bloques seleccionados');
       }
 
       const tempTest = {
         title: 'Test Personalizado',
         description: 'Test creado con bloques personalizados',
-        questions: selectedQuestions.map(q => ({
+        questions: finalQuestions.map(q => ({
           id: q.id,
           text: q.text,
           type: q.type,
           options: q.options,
-          correctAnswer: q.correctAnswer
+          correctAnswer: q.correctAnswer,
+          blockName: q.blockName // Añadimos el nombre del bloque para la revisión
         })),
         createdAt: Timestamp.now(),
         type: 'temporary',

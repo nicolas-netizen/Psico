@@ -4,7 +4,7 @@ import { doc, getDoc, collection, query, where, getDocs, deleteDoc } from 'fireb
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import { Loader2, CheckCircle, XCircle, AlertCircle, TrendingUp, Clock, Target } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, AlertCircle, TrendingUp, Clock, Target, Lightbulb, CheckCircle2 } from 'lucide-react';
 
 interface Question {
   id: string;
@@ -126,6 +126,105 @@ const TestReview = () => {
     }
   };
 
+  const getBlockRecommendation = (blockName: string, percentage: number, timeSpent: number) => {
+    const recommendations: { [key: string]: { tips: string[], exercises: string[], resources: string[] } } = {
+      'Sinónimos': {
+        tips: [
+          'Practica la lectura activa subrayando sinónimos',
+          'Crea tarjetas de estudio con palabras y sus sinónimos',
+          'Utiliza un diccionario de sinónimos regularmente'
+        ],
+        exercises: [
+          'Ejercicios de completar oraciones con sinónimos',
+          'Juegos de emparejamiento de palabras',
+          'Redacción usando sinónimos específicos'
+        ],
+        resources: [
+          'Diccionario de la RAE',
+          'Wordreference - Sección de sinónimos',
+          'Ejercicios de vocabulario en línea'
+        ]
+      },
+      'Antónimos': {
+        tips: [
+          'Estudia palabras junto con sus opuestos',
+          'Practica identificando antónimos en textos',
+          'Crea listas de pares de antónimos'
+        ],
+        exercises: [
+          'Ejercicios de opuestos en contexto',
+          'Juegos de palabras contrarias',
+          'Práctica con prefijos de negación'
+        ],
+        resources: [
+          'Diccionario de antónimos',
+          'Ejercicios de antónimos en línea',
+          'Aplicaciones de vocabulario'
+        ]
+      },
+      'Analogías Verbales': {
+        tips: [
+          'Identifica los tipos de relaciones analógicas',
+          'Practica con diferentes categorías de analogías',
+          'Analiza la lógica detrás de cada analogía'
+        ],
+        exercises: [
+          'Ejercicios de completar analogías',
+          'Crear tus propias analogías',
+          'Práctica con analogías complejas'
+        ],
+        resources: [
+          'Guías de razonamiento verbal',
+          'Tests de práctica de analogías',
+          'Videos explicativos sobre tipos de analogías'
+        ]
+      },
+      'Operaciones Elementales': {
+        tips: [
+          'Repasa las reglas básicas de aritmética',
+          'Practica el cálculo mental',
+          'Identifica patrones en operaciones'
+        ],
+        exercises: [
+          'Ejercicios de cálculo rápido',
+          'Problemas de matemática básica',
+          'Juegos de números'
+        ],
+        resources: [
+          'Khan Academy - Matemáticas básicas',
+          'Aplicaciones de práctica matemática',
+          'Videos tutoriales de operaciones'
+        ]
+      }
+    };
+
+    const defaultRecommendation = {
+      tips: [
+        'Practica regularmente con ejercicios específicos',
+        'Toma notas y revisa los conceptos básicos',
+        'Busca ayuda cuando encuentres dificultades'
+      ],
+      exercises: [
+        'Ejercicios de práctica general',
+        'Tests de autoevaluación',
+        'Ejercicios de repaso'
+      ],
+      resources: [
+        'Material de estudio en línea',
+        'Videos educativos',
+        'Libros de práctica'
+      ]
+    };
+
+    const blockRec = recommendations[blockName] || defaultRecommendation;
+    
+    return {
+      performance: percentage >= 80 ? 'excelente' : percentage >= 60 ? 'bueno' : 'necesita_mejora',
+      timeEfficiency: timeSpent > 120 ? 'lento' : timeSpent < 60 ? 'rápido' : 'moderado',
+      ...blockRec
+    };
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
@@ -220,22 +319,92 @@ const TestReview = () => {
           </div>
         </div>
 
-        {/* Recomendaciones */}
-        <div className="bg-white rounded-xl shadow-sm p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Recomendaciones de Mejora</h2>
-          <div className="space-y-4">
-            {blockPerformance
-              .filter(block => block.percentage < 80)
-              .map(block => (
-                <div key={block.blockName} className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-900 mb-2">{block.blockName}</h3>
-                  <p className="text-gray-600">
-                    {block.percentage < 60
-                      ? `Necesitas reforzar significativamente este bloque. Considera dedicar más tiempo a estudiar los conceptos básicos de ${block.blockName}.`
-                      : `Tienes una buena base en ${block.blockName}, pero puedes mejorar practicando más con ejercicios específicos.`}
-                  </p>
+        {/* Plan de Mejora Personalizado */}
+        <div className="bg-white rounded-xl shadow-sm p-8 mt-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+            <Lightbulb className="w-6 h-6 mr-2 text-[#91c26a]" />
+            Plan de Mejora Personalizado
+          </h2>
+          
+          <div className="space-y-6">
+            {blockPerformance.map(block => {
+              const recommendation = getBlockRecommendation(
+                block.blockName,
+                block.percentage,
+                result.timeSpent / test.questions.length
+              );
+
+              return (
+                <div key={block.blockName} className="bg-gray-50 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">{block.blockName}</h3>
+                    <span className={`px-3 py-1 rounded-full text-sm ${
+                      block.percentage >= 80 ? 'bg-green-100 text-green-800' :
+                      block.percentage >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {block.percentage >= 80 ? 'Excelente' :
+                       block.percentage >= 60 ? 'Buen progreso' :
+                       'Necesita práctica'}
+                    </span>
+                  </div>
+
+                  {block.percentage < 100 && (
+                    <>
+                      <div className="mb-4">
+                        <h4 className="font-medium text-gray-900 mb-2">Consejos de mejora:</h4>
+                        <ul className="list-disc list-inside space-y-1 text-gray-600">
+                          {recommendation.tips.map((tip, index) => (
+                            <li key={index}>{tip}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="mb-4">
+                        <h4 className="font-medium text-gray-900 mb-2">Ejercicios recomendados:</h4>
+                        <ul className="list-disc list-inside space-y-1 text-gray-600">
+                          {recommendation.exercises.map((exercise, index) => (
+                            <li key={index}>{exercise}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2">Recursos útiles:</h4>
+                        <ul className="list-disc list-inside space-y-1 text-gray-600">
+                          {recommendation.resources.map((resource, index) => (
+                            <li key={index}>{resource}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  )}
+
+                  {block.percentage === 100 && (
+                    <div className="text-green-600">
+                      <CheckCircle2 className="w-5 h-5 inline-block mr-2" />
+                      ¡Excelente trabajo! Has dominado este bloque perfectamente.
+                    </div>
+                  )}
                 </div>
-              ))}
+              );
+            })}
+          </div>
+
+          {/* Resumen y Siguiente Paso */}
+          <div className="mt-8 p-6 bg-[#91c26a] bg-opacity-10 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Próximos pasos recomendados</h3>
+            <p className="text-gray-700 mb-4">
+              {blockPerformance.every(b => b.percentage >= 80)
+                ? '¡Excelente trabajo! Considera intentar tests más desafiantes para seguir mejorando.'
+                : 'Enfócate primero en mejorar los bloques con menor rendimiento. Programa sesiones de práctica regulares.'}
+            </p>
+            <button
+              onClick={() => navigate('/custom-test-creator')}
+              className="bg-[#91c26a] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition-colors"
+            >
+              Crear Nuevo Test de Práctica
+            </button>
           </div>
         </div>
 

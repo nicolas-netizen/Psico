@@ -3,8 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
-import { Brain, Clock, Trophy, ChevronRight, Plus, Calendar } from 'lucide-react';
+import { Brain, Clock, Trophy, ChevronRight, Plus, Calendar, TrendingUp, Activity } from 'lucide-react';
 import { toast } from 'react-toastify';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, Cell
+} from 'recharts';
 
 interface Plan {
   name: string;
@@ -80,6 +84,12 @@ const Dashboard = () => {
     quantity: 1
   });
 
+  const [performanceData, setPerformanceData] = useState<any>({
+    timeProgress: [],
+    blockPerformance: [],
+    categoryDistribution: []
+  });
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -147,7 +157,8 @@ const Dashboard = () => {
           // Primero intentamos obtener solo los resultados filtrados por userId
           const resultsQuery = query(
             collection(db, 'testResults'),
-            where('userId', '==', currentUser.uid)
+            where('userId', '==', currentUser.uid),
+            orderBy('completedAt', 'desc')
           );
           const resultsSnapshot = await getDocs(resultsQuery);
           
@@ -164,13 +175,94 @@ const Dashboard = () => {
             }) as TestResult[];
             
           setUserResults(resultsData);
-        } catch (error: any) {
-          console.error('Error completo de Firebase:', error);
-          toast.error(`Error al cargar resultados: ${error.message}`);
+
+          // Procesar datos para los gráficos
+          const timeProgressData = resultsData
+            .filter(result => result.completedAt && result.score != null && result.timeSpent != null)
+            .map(result => ({
+              date: result.completedAt?.toDate?.() 
+                ? new Date(result.completedAt.toDate()).toLocaleDateString() 
+                : 'Fecha desconocida',
+              score: Number(result.score) || 0,
+              timeSpent: (Number(result.timeSpent) || 0) / 60 // Convertir a minutos
+            }))
+            .reverse(); // Para mostrar progreso cronológico
+
+          // Calcular rendimiento por bloque
+          const blockPerformanceMap = new Map();
+          for (const result of resultsData) {
+            if (!result.testId) continue;
+
+            try {
+              const testDoc = await getDoc(doc(db, 'tests', result.testId));
+              if (!testDoc.exists()) continue;
+
+              const testData = testDoc.data();
+              const questions = testData?.questions || [];
+              
+              questions.forEach((question: any, index: number) => {
+                if (!question || !question.blockName) return;
+                
+                const blockName = question.blockName;
+                if (!blockPerformanceMap.has(blockName)) {
+                  blockPerformanceMap.set(blockName, { correct: 0, total: 0 });
+                }
+                
+                const stats = blockPerformanceMap.get(blockName);
+                stats.total++;
+                
+                // Verificar que result.answers existe y tiene el índice
+                if (result.answers && Array.isArray(result.answers) && 
+                    result.answers[index] != null && question.correctAnswer != null) {
+                  if (result.answers[index] === question.correctAnswer) {
+                    stats.correct++;
+                  }
+                }
+              });
+            } catch (error) {
+              console.error(`Error al procesar test ${result.testId}:`, error);
+              continue;
+            }
+          }
+
+          const blockPerformanceData = Array.from(blockPerformanceMap.entries())
+            .filter(([name, stats]) => stats.total > 0) // Solo incluir bloques con datos
+            .map(([name, stats]) => ({
+              name,
+              percentage: Math.round((stats.correct / stats.total) * 100)
+            }));
+
+          // Calcular distribución de categorías
+          const categoryStats = resultsData
+            .filter(result => result.score != null)
+            .reduce((acc: any, result) => {
+              const score = Number(result.score) || 0;
+              const category = score >= 80 ? 'Excelente' :
+                             score >= 60 ? 'Bueno' : 'Necesita Mejora';
+              acc[category] = (acc[category] || 0) + 1;
+              return acc;
+            }, {});
+
+          const categoryDistributionData = Object.entries(categoryStats)
+            .map(([name, value]) => ({
+              name,
+              value: Number(value) || 0
+            }))
+            .filter(item => item.value > 0); // Solo incluir categorías con datos
+
+          setPerformanceData({
+            timeProgress: timeProgressData,
+            blockPerformance: blockPerformanceData,
+            categoryDistribution: categoryDistributionData
+          });
+
+        } catch (error) {
+          console.error('Error al cargar los resultados:', error);
+          toast.error('Error al cargar el historial de resultados');
         }
 
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error:', error);
         toast.error('Error al cargar los datos');
       } finally {
         setLoading(false);
@@ -253,18 +345,6 @@ const Dashboard = () => {
     }
   };
 
-  // Preparar datos para los gráficos
-  const progressData = userResults.slice(0, 10).reverse().map(result => ({
-    name: new Date(result.completedAt.toDate()).toLocaleDateString(),
-    score: result.score
-  }));
-
-  const performanceData = [
-    { name: 'Excelente', value: userResults.filter(r => r.score >= 70).length },
-    { name: 'Regular', value: userResults.filter(r => r.score >= 50 && r.score < 70).length },
-    { name: 'Necesita Mejorar', value: userResults.filter(r => r.score < 50).length }
-  ];
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -330,6 +410,85 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Gráficos de Rendimiento */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+        {/* Progreso en el Tiempo */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <TrendingUp className="w-5 h-5 mr-2 text-[#91c26a]" />
+            Progreso en el Tiempo
+          </h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={performanceData.timeProgress}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="score" stroke="#91c26a" name="Puntuación" />
+                <Line type="monotone" dataKey="timeSpent" stroke="#fbbf24" name="Tiempo (min)" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Rendimiento por Bloque */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Activity className="w-5 h-5 mr-2 text-[#91c26a]" />
+            Rendimiento por Bloque
+          </h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={performanceData.blockPerformance}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="percentage" fill="#91c26a" name="Porcentaje de Aciertos">
+                  {performanceData.blockPerformance.map((entry: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={
+                      entry.percentage >= 80 ? '#91c26a' :
+                      entry.percentage >= 60 ? '#fbbf24' : '#ef4444'
+                    } />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Distribución de Resultados */}
+        <div className="bg-white rounded-xl shadow-sm p-6 lg:col-span-2">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Trophy className="w-5 h-5 mr-2 text-[#91c26a]" />
+            Distribución de Resultados
+          </h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={performanceData.categoryDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {performanceData.categoryDistribution.map((entry: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow-sm p-6">
@@ -364,94 +523,6 @@ const Dashboard = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Tiempo de Estudio</p>
               <p className="text-2xl font-semibold text-gray-900">8h 30m</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Progreso Reciente
-          </h3>
-          <div className="h-64 w-full bg-gradient-to-b from-[#91c26a20] to-transparent rounded-lg p-4">
-            {/* Gráfico de ejemplo */}
-            <div className="relative h-full">
-              <div className="absolute bottom-0 left-0 right-0 h-px bg-gray-200" />
-              <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200" />
-              
-              {/* Línea de progreso */}
-              <svg className="absolute inset-0" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <path
-                  d="M0,50 L20,45 L40,60 L60,30 L80,40 L100,20"
-                  fill="none"
-                  stroke="#91c26a"
-                  strokeWidth="2"
-                />
-              </svg>
-              
-              {/* Puntos de datos */}
-              <div className="absolute bottom-[45%] left-[20%] w-2 h-2 bg-[#91c26a] rounded-full" />
-              <div className="absolute bottom-[60%] left-[40%] w-2 h-2 bg-[#91c26a] rounded-full" />
-              <div className="absolute bottom-[30%] left-[60%] w-2 h-2 bg-[#91c26a] rounded-full" />
-              <div className="absolute bottom-[40%] left-[80%] w-2 h-2 bg-[#91c26a] rounded-full" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Distribución de Rendimiento
-          </h3>
-          <div className="h-64 flex items-center justify-center">
-            {/* Gráfico circular de ejemplo */}
-            <div className="relative w-48 h-48">
-              <svg className="w-full h-full" viewBox="0 0 100 100">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="45"
-                  fill="none"
-                  stroke="#eee"
-                  strokeWidth="10"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="45"
-                  fill="none"
-                  stroke="#91c26a"
-                  strokeWidth="10"
-                  strokeDasharray="220"
-                  strokeDashoffset="66"
-                  transform="rotate(-90 50 50)"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="45"
-                  fill="none"
-                  stroke="#fbbf24"
-                  strokeWidth="10"
-                  strokeDasharray="220"
-                  strokeDashoffset="176"
-                  transform="rotate(-90 50 50)"
-                />
-              </svg>
-              {/* Leyenda */}
-              <div className="absolute -bottom-16 left-0 right-0">
-                <div className="flex justify-center space-x-4 text-sm">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-[#91c26a] rounded-full mr-1"></div>
-                    <span>Excelente (70%)</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-[#fbbf24] rounded-full mr-1"></div>
-                    <span>Regular (30%)</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -498,8 +569,7 @@ const Dashboard = () => {
             </p>
             <button
               onClick={() => navigate('/plans')}
-              className="mt-4 px-6 py-2 bg-[#91c26a] text-white rounded-lg 
-                       hover:bg-[#82b35b] transition-colors"
+              className="bg-[#91c26a] text-white px-4 py-2 rounded-lg hover:bg-[#82b35b] transition-colors"
             >
               Ver planes disponibles
             </button>

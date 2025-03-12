@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { db } from './firebase/firebaseConfig';
 import { createInitialPlans, updateExistingPlans } from './services/firestore';
 import { Toaster } from 'react-hot-toast';
 
@@ -17,14 +16,9 @@ import Footer from './components/Footer';
 import Dashboard from './components/Dashboard';
 import TestTakingPage from './pages/TestTakingPage';
 import TestResultsPage from './components/test/TestResultsPage';
-import PlanList from './components/plans/PlanList';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
 import BaremoCalculatorPage from './pages/BaremoCalculatorPage';
-import TestResults from './components/TestResults';
-import TestScreen from './pages/TestScreen';
-import Results from './components/Results';
-import TestManager from './components/admin/TestManager';
 import AdminRoute from './components/auth/AdminRoute';
 import CustomTestCreator from './components/CustomTestCreator';
 import SolveTest from './components/SolveTest';
@@ -41,14 +35,16 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
+  const isTestPage = location.pathname.includes('solve-test');
+  const showNavbarTest = location.pathname === '/solve-test/xtNw7Hg0hcTfjBF6nKsr';
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {!isAdminPage && <Navbar />}
-      <div className={`flex-grow ${!isAdminPage ? 'pt-16' : ''}`}>
+    <div className={`min-h-screen flex flex-col ${isTestPage && !showNavbarTest ? 'bg-gray-50' : ''}`}>
+      {(!isAdminPage && !isTestPage) || showNavbarTest ? <Navbar /> : null}
+      <div className={`flex-grow ${(!isAdminPage && !isTestPage) || showNavbarTest ? 'pt-16' : ''}`}>
         {children}
       </div>
-      {!isAdminPage && <Footer />}
+      {!isAdminPage && !isTestPage && <Footer />}
       <ToastContainer position="bottom-right" />
     </div>
   );

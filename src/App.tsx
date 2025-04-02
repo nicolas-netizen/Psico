@@ -36,12 +36,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
   const isTestPage = location.pathname.includes('solve-test');
-  const showNavbarTest = location.pathname === '/solve-test/xtNw7Hg0hcTfjBF6nKsr';
-
+  
   return (
-    <div className={`min-h-screen flex flex-col ${isTestPage && !showNavbarTest ? 'bg-gray-50' : ''}`}>
-      {(!isAdminPage && !isTestPage) || showNavbarTest ? <Navbar /> : null}
-      <div className={`flex-grow ${(!isAdminPage && !isTestPage) || showNavbarTest ? 'pt-16' : ''}`}>
+    <div className={`min-h-screen flex flex-col ${isTestPage ? 'bg-gray-50' : ''}`}>
+      {!isAdminPage && <Navbar />}
+      <div className={`flex-grow ${!isAdminPage && !isTestPage ? 'pt-16' : 'pt-16'}`}>
         {children}
       </div>
       {!isAdminPage && !isTestPage && <Footer />}

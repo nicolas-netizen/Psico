@@ -4,6 +4,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { createInitialPlans, updateExistingPlans } from './services/firestore';
+import { baremoService } from './services/baremoService';
 import { Toaster } from 'react-hot-toast';
 
 // Componentes de autenticación
@@ -60,6 +61,7 @@ function App() {
         // Firebase ya está inicializado en firebaseConfig.ts
         await createInitialPlans();
         await updateExistingPlans();
+        await baremoService.initializeBaremoConfig();
       } catch (error) {
         console.error('Error initializing app:', error);
       } finally {
@@ -105,6 +107,16 @@ function App() {
                   <PlansPage />
                 </Layout>
               } 
+            />
+            <Route 
+              path="/baremo" 
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <BaremoCalculatorPage />
+                  </Layout>
+                </PrivateRoute>
+              }
             />
             <Route 
               path="/calculadora-baremo" 

@@ -9,6 +9,7 @@ import { Toaster } from 'react-hot-toast';
 // Componentes de autenticación
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
+import ResetPassword from './pages/ResetPassword';
 
 // Componentes principales
 import Navbar from './components/Navbar';
@@ -36,6 +37,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
   const isTestPage = location.pathname.includes('solve-test');
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
   
   return (
     <div className={`min-h-screen flex flex-col ${isTestPage ? 'bg-gray-50' : ''}`}>
@@ -43,7 +45,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       <div className={`flex-grow ${!isAdminPage && !isTestPage ? 'pt-16' : 'pt-16'}`}>
         {children}
       </div>
-      {!isAdminPage && !isTestPage && <Footer />}
+      {!isAdminPage && !isTestPage && !isAuthPage && <Footer />}
       <ToastContainer position="bottom-right" />
     </div>
   );
@@ -85,6 +87,7 @@ function App() {
             <Route path="/" element={<Layout><Home /></Layout>} />
             <Route path="/login" element={<Layout><Login /></Layout>} />
             <Route path="/register" element={<Layout><Register /></Layout>} />
+            <Route path="/reset-password" element={<Layout><ResetPassword /></Layout>} />
             <Route 
               path="/dashboard" 
               element={

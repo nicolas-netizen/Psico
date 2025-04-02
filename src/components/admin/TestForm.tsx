@@ -1,376 +1,161 @@
-import React, { useState, useEffect } from 'react';
-import { toast } from 'react-hot-toast';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Test, 
-  TestQuestion,
-  AptitudeCategory,
-  Aptitude,
-  QuestionType
-} from '../../types/Test';
-import { Plan, getPlans } from '../../services/firestore';
-import { collection, addDoc, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../firebase/firebaseConfig';
-
-const APTITUDE_CATEGORIES = {
-  VERBAL: [
-    AptitudeCategory.SYNONYMS,
-    AptitudeCategory.ANTONYMS,
-    AptitudeCategory.VERBAL_ANALOGIES,
-    AptitudeCategory.SPELLING,
-    AptitudeCategory.PROVERBS
-  ],
-  NUMERICAL: [
-    AptitudeCategory.BASIC_OPERATIONS,
-    AptitudeCategory.REASONING_PROBLEMS,
-    AptitudeCategory.AREA_PERIMETER_CALCULATION,
-    AptitudeCategory.DECIMAL_FRACTION_OPERATIONS,
-    AptitudeCategory.PROPORTIONS,
-    AptitudeCategory.PERCENTAGES
-  ],
-  SPATIAL: [
-    AptitudeCategory.FIGURE_FOLDING,
-    AptitudeCategory.PERSPECTIVE_VISUALIZATION,
-    AptitudeCategory.FIGURE_ROTATION,
-    AptitudeCategory.BLOCK_COUNTING
-  ],
-  MECHANICAL: [
-    AptitudeCategory.PHYSICAL_MECHANICAL_TESTS,
-    AptitudeCategory.MECHANISMS,
-    AptitudeCategory.BALANCE_SYSTEMS,
-    AptitudeCategory.PULLEYS,
-    AptitudeCategory.GEARS
-  ],
-  PERCEPTUAL: [
-    AptitudeCategory.FILE_ORGANIZATION,
-    AptitudeCategory.ALPHABETICAL_ORDERING,
-    AptitudeCategory.FATIGUE_RESISTANCE,
-    AptitudeCategory.ERROR_DETECTION
-  ]
-};
+import { Test, TestBlock } from '../../types/Test';
+import { toast } from 'react-toastify';
 
 interface TestFormProps {
-  test?: Test | null;
-  onClose: () => void;
-  onSave: (test: Test) => void;
-  isCreating: boolean;
+  onSubmit: (test: Omit<Test, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
 }
 
-const TestForm: React.FC<TestFormProps> = ({ test: initialTest, onClose, onSave, isCreating }) => {
+const TestForm: React.FC<TestFormProps> = ({ onSubmit }) => {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [blocks, setBlocks] = useState<Omit<TestBlock, 'id'>[]>([]);
+  const [currentBlock, setCurrentBlock] = useState<Omit<TestBlock, 'id'>>({
+    title: '',
+    description: '',
+    timeLimit: 7,
+    type: 'verbal',
+    questions: []
+  });
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [test, setTest] = useState<Partial<Test>>({
-    title: initialTest?.title || '',
-    description: initialTest?.description || '',
-    questions: initialTest?.questions || [],
-    plans: initialTest?.plans || [],
-    category: initialTest?.category || '',
-    timeLimit: initialTest?.timeLimit || 30,
-    categories: initialTest?.categories || []
-  });
-  const [currentQuestion, setCurrentQuestion] = useState<Partial<TestQuestion>>({
-    text: '',
-    options: ['', '', '', ''],
-    correctAnswer: 0
-  });
-  const [selectedAptitude, setSelectedAptitude] = useState<string>(initialTest?.category || '');
-  const [selectedCategories, setSelectedCategories] = useState<AptitudeCategory[]>(initialTest?.categories || []);
 
-  useEffect(() => {
-    const fetchPlans = async () => {
-      try {
-        const fetchedPlans = await getPlans();
-        setPlans(fetchedPlans);
-      } catch (error) {
-        toast.error('Error al cargar los planes');
-      }
-    };
-    fetchPlans();
-  }, []);
+  const handleAddQuestion = () => {
+    setCurrentBlock(prev => ({
+      ...prev,
+      questions: [
+        ...prev.questions,
+        {
+          id: Date.now().toString(),
+          text: '',
+          options: ['', '', '', ''],
+          correctAnswer: 0
+        }
+      ]
+    }));
+  };
 
-  useEffect(() => {
-    if (initialTest) {
-      setTest({
-        ...initialTest,
-        questions: initialTest.questions || []
-      });
-      setSelectedAptitude(initialTest.category || '');
-      setSelectedCategories(initialTest.categories || []);
+  const handleQuestionChange = (index: number, field: string, value: string) => {
+    setCurrentBlock(prev => ({
+      ...prev,
+      questions: prev.questions.map((q, i) => 
+        i === index ? { ...q, [field]: value } : q
+      )
+    }));
+  };
+
+  const handleOptionChange = (questionIndex: number, optionIndex: number, value: string) => {
+    setCurrentBlock(prev => ({
+      ...prev,
+      questions: prev.questions.map((q, i) => 
+        i === questionIndex ? {
+          ...q,
+          options: q.options.map((opt, j) => j === optionIndex ? value : opt)
+        } : q
+      )
+    }));
+  };
+
+  const handleCorrectAnswerChange = (questionIndex: number, value: number) => {
+    setCurrentBlock(prev => ({
+      ...prev,
+      questions: prev.questions.map((q, i) => 
+        i === questionIndex ? { ...q, correctAnswer: value } : q
+      )
+    }));
+  };
+
+  const handleAddBlock = () => {
+    if (!currentBlock.title || currentBlock.questions.length === 0) {
+      toast.error('El bloque debe tener un título y al menos una pregunta');
+      return;
     }
-  }, [initialTest]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setTest(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleAptitudeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const aptitude = e.target.value;
-    setSelectedAptitude(aptitude);
-    setSelectedCategories([]);
-    setTest(prev => ({ ...prev, category: aptitude }));
-  };
-
-  const handleCategoryToggle = (category: AptitudeCategory) => {
-    setSelectedCategories(prev => {
-      if (prev.includes(category)) {
-        return prev.filter(c => c !== category);
-      }
-      return [...prev, category];
+    setBlocks(prev => [...prev, currentBlock]);
+    setCurrentBlock({
+      title: '',
+      description: '',
+      timeLimit: 7,
+      type: 'verbal',
+      questions: []
     });
-  };
-
-  const handlePlanToggle = (planId: string) => {
-    setTest(prev => {
-      const plans = prev.plans || [];
-      if (plans.includes(planId)) {
-        return { ...prev, plans: plans.filter(id => id !== planId) };
-      }
-      return { ...prev, plans: [...plans, planId] };
-    });
-  };
-
-  const handleQuestionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, index?: number) => {
-    const { name, value } = e.target;
-    if (typeof index === 'number') {
-      setCurrentQuestion(prev => ({
-        ...prev,
-        options: prev.options?.map((opt, i) => i === index ? value : opt)
-      }));
-    } else {
-      setCurrentQuestion(prev => ({ ...prev, [name]: value }));
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+
+    if (!title || !description || blocks.length === 0) {
+      toast.error('Por favor completa todos los campos requeridos');
+      return;
+    }
 
     try {
-      // Validaciones
-      if (!test.title || !test.description || !test.category || !test.plans?.length) {
-        toast.error('Por favor completa todos los campos requeridos');
-        return;
-      }
-
-      if (!test.questions?.length) {
-        toast.error('Debes agregar al menos una pregunta al test');
-        return;
-      }
-
-      // Validar que cada pregunta tenga texto y opciones válidas
-      const invalidQuestions = test.questions.some(q => 
-        !q.text || q.options.some(opt => !opt) || q.correctAnswer === undefined
-      );
-
-      if (invalidQuestions) {
-        toast.error('Todas las preguntas deben tener texto, opciones y una respuesta correcta');
-        return;
-      }
-
-      const testData = {
-        ...test,
-        updatedAt: new Date(),
-        categories: selectedCategories,
-      };
-
-      if (isCreating) {
-        testData.createdAt = new Date();
-        testData.status = 'active';
-        const docRef = await addDoc(collection(db, 'tests'), testData);
-        onSave({ ...testData, id: docRef.id } as Test);
-      } else if (initialTest?.id) {
-        await updateDoc(doc(db, 'tests', initialTest.id), testData);
-        onSave({ ...testData, id: initialTest.id } as Test);
-      }
-      
-      toast.success(isCreating ? 'Test creado exitosamente' : 'Test actualizado exitosamente');
-      onClose();
+      await onSubmit({
+        title,
+        description,
+        blocks: blocks.map(block => ({
+          ...block,
+          id: Date.now().toString()
+        }))
+      });
+      toast.success('Test creado exitosamente');
+      navigate('/admin/tests');
     } catch (error) {
-      console.error('Error al guardar el test:', error);
-      toast.error('Error al guardar el test');
-    } finally {
-      setLoading(false);
+      console.error('Error al crear el test:', error);
+      toast.error('Error al crear el test');
     }
-  };
-
-  const handleQuestionSubmit = () => {
-    if (!currentQuestion.text || currentQuestion.options?.some(opt => !opt)) {
-      toast.error('La pregunta debe tener texto y todas las opciones completadas');
-      return;
-    }
-
-    if (currentQuestion.correctAnswer === undefined) {
-      toast.error('Debes seleccionar una respuesta correcta');
-      return;
-    }
-
-    setTest(prev => ({
-      ...prev,
-      questions: [...(prev.questions || []), currentQuestion as TestQuestion]
-    }));
-
-    // Limpiar el formulario de pregunta actual
-    setCurrentQuestion({
-      text: '',
-      options: ['', '', '', ''],
-      correctAnswer: 0
-    });
-
-    toast.success('Pregunta agregada exitosamente');
-  };
-
-  const handleRemoveQuestion = (index: number) => {
-    setTest(prev => ({
-      ...prev,
-      questions: prev.questions?.filter((_, i) => i !== index) || []
-    }));
-    toast.success('Pregunta eliminada');
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
-      <div className="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold">
-            {isCreating ? 'Crear Nuevo Test' : 'Editar Test'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Información básica */}
+    <div className="max-w-4xl mx-auto p-6">
+      <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-bold mb-6">Información General</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Título</label>
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                Título del Test
+              </label>
               <input
                 type="text"
-                name="title"
-                value={test.title}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                id="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
                 required
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-700">Descripción</label>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                Descripción
+              </label>
               <textarea
-                name="description"
-                value={test.description}
-                onChange={handleInputChange}
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
                 rows={3}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 required
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Tiempo límite (minutos)</label>
-              <input
-                type="number"
-                name="timeLimit"
-                value={test.timeLimit}
-                onChange={handleInputChange}
-                min="1"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Aptitud</label>
-              <select
-                value={selectedAptitude}
-                onChange={handleAptitudeChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                required
-              >
-                <option value="">Selecciona una aptitud</option>
-                {Object.keys(APTITUDE_CATEGORIES).map(aptitude => (
-                  <option key={aptitude} value={aptitude}>
-                    {aptitude}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedAptitude && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Categorías de {selectedAptitude}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {APTITUDE_CATEGORIES[selectedAptitude as keyof typeof APTITUDE_CATEGORIES].map(category => (
-                    <label key={category} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedCategories.includes(category)}
-                        onChange={() => handleCategoryToggle(category)}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <span className="text-sm text-gray-700">{category}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Planes</label>
-              <div className="grid grid-cols-2 gap-2">
-                {plans.map(plan => (
-                  <label key={plan.id} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={test.plans?.includes(plan.id)}
-                      onChange={() => handlePlanToggle(plan.id)}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm text-gray-700">{plan.name}</span>
-                  </label>
-                ))}
-              </div>
             </div>
           </div>
+        </div>
 
-          {/* Preguntas existentes */}
-          {test.questions && test.questions.length > 0 && (
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Preguntas Existentes</h3>
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-bold mb-6">Bloques del Test</h2>
+          
+          {/* Lista de bloques agregados */}
+          {blocks.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-4">Bloques creados:</h3>
               <div className="space-y-4">
-                {test.questions.map((question, index) => (
-                  <div key={index} className="border rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-medium">Pregunta {index + 1}</h4>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveQuestion(index)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                    <p className="text-gray-700 mb-2">{question.text}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {question.options.map((option, optIndex) => (
-                        <div
-                          key={optIndex}
-                          className={`p-2 rounded ${
-                            question.correctAnswer === optIndex
-                              ? 'bg-green-100 border-green-500'
-                              : 'bg-gray-50'
-                          }`}
-                        >
-                          {option}
-                        </div>
-                      ))}
+                {blocks.map((block, index) => (
+                  <div key={index} className="p-4 border border-gray-200 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-medium">{block.title}</h4>
+                      <span className="text-sm text-gray-500">
+                        {block.questions.length} preguntas - {block.timeLimit} minutos
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -378,75 +163,144 @@ const TestForm: React.FC<TestFormProps> = ({ test: initialTest, onClose, onSave,
             </div>
           )}
 
-          {/* Nueva pregunta */}
-          <div className="border-t pt-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Agregar Nueva Pregunta</h3>
-            <div className="space-y-4">
+          {/* Formulario del bloque actual */}
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="blockTitle" className="block text-sm font-medium text-gray-700">
+                Título del Bloque
+              </label>
+              <input
+                type="text"
+                id="blockTitle"
+                value={currentBlock.title}
+                onChange={(e) => setCurrentBlock(prev => ({ ...prev, title: e.target.value }))}
+                className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="blockDescription" className="block text-sm font-medium text-gray-700">
+                Descripción del Bloque
+              </label>
+              <textarea
+                id="blockDescription"
+                value={currentBlock.description}
+                onChange={(e) => setCurrentBlock(prev => ({ ...prev, description: e.target.value }))}
+                className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+                rows={2}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Pregunta</label>
-                <input
-                  type="text"
-                  name="text"
-                  value={currentQuestion.text}
-                  onChange={handleQuestionChange}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
+                <label htmlFor="blockType" className="block text-sm font-medium text-gray-700">
+                  Tipo de Bloque
+                </label>
+                <select
+                  id="blockType"
+                  value={currentBlock.type}
+                  onChange={(e) => setCurrentBlock(prev => ({ ...prev, type: e.target.value as 'verbal' | 'numerical' | 'abstract' }))}
+                  className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+                >
+                  <option value="verbal">Verbal</option>
+                  <option value="numerical">Numérico</option>
+                  <option value="abstract">Abstracto</option>
+                </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {currentQuestion.options?.map((option, index) => (
-                  <div key={index}>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Opción {index + 1}
-                    </label>
-                    <div className="mt-1 flex items-center space-x-2">
-                      <input
-                        type="text"
-                        value={option}
-                        onChange={(e) => handleQuestionChange(e, index)}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                      />
-                      <input
-                        type="radio"
-                        name="correctAnswer"
-                        checked={currentQuestion.correctAnswer === index}
-                        onChange={() => setCurrentQuestion(prev => ({ ...prev, correctAnswer: index }))}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
-                      />
-                    </div>
-                  </div>
-                ))}
+              <div>
+                <label htmlFor="timeLimit" className="block text-sm font-medium text-gray-700">
+                  Tiempo Límite (minutos)
+                </label>
+                <input
+                  type="number"
+                  id="timeLimit"
+                  value={currentBlock.timeLimit}
+                  onChange={(e) => setCurrentBlock(prev => ({ ...prev, timeLimit: parseInt(e.target.value) }))}
+                  className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+                  min="1"
+                />
               </div>
+            </div>
+
+            {/* Preguntas del bloque */}
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold">Preguntas</h3>
+              {currentBlock.questions.map((question, qIndex) => (
+                <div key={question.id} className="p-4 border border-gray-200 rounded-lg space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Pregunta {qIndex + 1}
+                    </label>
+                    <input
+                      type="text"
+                      value={question.text}
+                      onChange={(e) => handleQuestionChange(qIndex, 'text', e.target.value)}
+                      className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+                      placeholder="Escribe la pregunta..."
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    {question.options.map((option, oIndex) => (
+                      <div key={oIndex} className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          name={`correct-${question.id}`}
+                          checked={question.correctAnswer === oIndex}
+                          onChange={() => handleCorrectAnswerChange(qIndex, oIndex)}
+                          className="h-4 w-4 text-[#91c26a] focus:ring-[#91c26a] border-gray-300"
+                        />
+                        <input
+                          type="text"
+                          value={option}
+                          onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)}
+                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+                          placeholder={`Opción ${oIndex + 1}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
 
               <button
                 type="button"
-                onClick={handleQuestionSubmit}
-                className="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                onClick={handleAddQuestion}
+                className="w-full py-2 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
               >
-                Agregar Pregunta
+                + Agregar Pregunta
+              </button>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleAddBlock}
+                className="bg-[#91c26a] text-white py-2 px-4 rounded-lg hover:bg-[#7ea756] transition-colors duration-200"
+              >
+                Guardar Bloque
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Botones de acción */}
-          <div className="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {loading ? 'Guardando...' : isCreating ? 'Crear Test' : 'Guardar Cambios'}
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="flex justify-end space-x-4">
+          <button
+            type="button"
+            onClick={() => navigate('/admin/tests')}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="bg-[#91c26a] text-white py-2 px-4 rounded-lg hover:bg-[#7ea756] transition-colors duration-200"
+          >
+            Crear Test
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

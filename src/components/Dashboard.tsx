@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
-import { Brain, Clock, Trophy, ChevronRight, Plus, Calendar, TrendingUp, Activity } from 'lucide-react';
+import { Brain, Clock, Trophy, ChevronRight, Plus, Calendar, TrendingUp, Activity, Settings } from 'lucide-react';
 import { toast } from 'react-toastify';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -55,7 +55,24 @@ interface BlockConfig {
 
 const COLORS = ['#91c26a', '#fbbf24', '#ef4444'];
 
-const Dashboard = () => {
+interface PerformanceData {
+  timeProgress: Array<{
+    date: string;
+    score: number;
+    timeSpent: number;
+    timeFormatted: string;
+  }>;
+  blockPerformance: Array<{
+    name: string;
+    value: number;
+  }>;
+  categoryDistribution: Array<{
+    name: string;
+    value: number;
+  }>;
+}
+
+const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [userPlan, setUserPlan] = useState<{
@@ -84,7 +101,7 @@ const Dashboard = () => {
     quantity: 1
   });
 
-  const [performanceData, setPerformanceData] = useState<any>({
+  const [performanceData, setPerformanceData] = useState<PerformanceData>({
     timeProgress: [],
     blockPerformance: [],
     categoryDistribution: []
@@ -179,13 +196,18 @@ const Dashboard = () => {
           // Procesar datos para los gráficos
           const timeProgressData = resultsData
             .filter(result => result.completedAt && result.score != null && result.timeSpent != null)
-            .map(result => ({
-              date: result.completedAt?.toDate?.() 
-                ? new Date(result.completedAt.toDate()).toLocaleDateString() 
-                : 'Fecha desconocida',
-              score: Number(result.score) || 0,
-              timeSpent: (Number(result.timeSpent) || 0) / 60 // Convertir a minutos
-            }))
+            .map(result => {
+              const timeInMinutes = Math.floor((Number(result.timeSpent) || 0) / 60);
+              const timeInSeconds = Math.floor((Number(result.timeSpent) || 0) % 60);
+              return {
+                date: result.completedAt?.toDate?.() 
+                  ? new Date(result.completedAt.toDate()).toLocaleDateString() 
+                  : 'Fecha desconocida',
+                score: Number(result.score) || 0,
+                timeSpent: timeInMinutes,
+                timeFormatted: `${timeInMinutes}:${timeInSeconds.toString().padStart(2, '0')}`
+              };
+            })
             .reverse(); // Para mostrar progreso cronológico
 
           // Calcular rendimiento por bloque
@@ -229,7 +251,7 @@ const Dashboard = () => {
             .filter(([name, stats]) => stats.total > 0) // Solo incluir bloques con datos
             .map(([name, stats]) => ({
               name,
-              percentage: Math.round((stats.correct / stats.total) * 100)
+              value: Math.round((stats.correct / stats.total) * 100)
             }));
 
           // Calcular distribución de categorías
@@ -285,8 +307,14 @@ const Dashboard = () => {
     navigate(`/test/${testId}`);
   };
 
-  const handleStartRandomTest = () => {
-    navigate('/test');
+  const handleStartRandomTest = async () => {
+    try {
+      // Implementación del inicio de test aleatorio
+      console.log('Starting random test...');
+    } catch (error) {
+      console.error('Error starting random test:', error);
+      toast.error('Error al iniciar el test aleatorio');
+    }
   };
 
   const addBlock = () => {
@@ -402,7 +430,7 @@ const Dashboard = () => {
           </button>
           
           <button
-            onClick={() => navigate('/test/random')}
+            onClick={handleStartRandomTest}
             className="text-[#91c26a] hover:text-[#82b35b] font-medium text-sm"
           >
             Test Aleatorio
@@ -424,7 +452,15 @@ const Dashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip 
+                  formatter={(value: number, name: string) => {
+                    if (name === "Tiempo (min)") {
+                      const data = performanceData.timeProgress.find(item => item.timeSpent === value);
+                      return data?.timeFormatted || value;
+                    }
+                    return value;
+                  }}
+                />
                 <Legend />
                 <Line type="monotone" dataKey="score" stroke="#91c26a" name="Puntuación" />
                 <Line type="monotone" dataKey="timeSpent" stroke="#fbbf24" name="Tiempo (min)" />
@@ -446,11 +482,11 @@ const Dashboard = () => {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="percentage" fill="#91c26a" name="Porcentaje de Aciertos">
+                <Bar dataKey="value" fill="#91c26a" name="Porcentaje de Aciertos">
                   {performanceData.blockPerformance.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={
-                      entry.percentage >= 80 ? '#91c26a' :
-                      entry.percentage >= 60 ? '#fbbf24' : '#ef4444'
+                      entry.value >= 80 ? '#91c26a' :
+                      entry.value >= 60 ? '#fbbf24' : '#ef4444'
                     } />
                   ))}
                 </Bar>

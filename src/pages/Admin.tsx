@@ -6,12 +6,12 @@ import TestManager from '../components/admin/TestManager';
 import PlansManager from '../components/admin/PlansManager';
 import QuestionManager from '../components/admin/QuestionManager';
 import DiscountCodeManager from '../components/admin/DiscountCodeManager';
-import TestBlockManager from '../components/admin/TestBlockManager';
 import BaremoAdmin from './admin/BaremoAdmin';
+import TestGenerator from '../components/admin/TestGenerator';
 import { LogOut } from 'lucide-react';
 
 const Admin: React.FC = () => {
-  const { currentUser, isAdmin, logout } = useAuth();
+  const { isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -36,21 +36,21 @@ const Admin: React.FC = () => {
         return <TestManager />;
       case 'questions':
         return <QuestionManager />;
-      case 'testBlocks':
-        return <TestBlockManager />;
       case 'plans':
         return <PlansManager />;
       case 'discountCodes':
         return <DiscountCodeManager />;
       case 'baremos':
         return <BaremoAdmin />;
+      case 'testGenerator':
+        return <TestGenerator />;
       default:
         return <AdminDashboard />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-gray-50">
       {/* Admin Header */}
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -69,87 +69,86 @@ const Admin: React.FC = () => {
               Cerrar Sesión
             </button>
           </div>
+
+          <div className="mt-2">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`${
+                  activeTab === 'dashboard'
+                    ? 'border-[#91c26a] text-[#91c26a]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => setActiveTab('tests')}
+                className={`${
+                  activeTab === 'tests'
+                    ? 'border-[#91c26a] text-[#91c26a]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                Tests
+              </button>
+              <button
+                onClick={() => setActiveTab('questions')}
+                className={`${
+                  activeTab === 'questions'
+                    ? 'border-[#91c26a] text-[#91c26a]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                Preguntas
+              </button>
+              <button
+                onClick={() => setActiveTab('testGenerator')}
+                className={`${
+                  activeTab === 'testGenerator'
+                    ? 'border-[#91c26a] text-[#91c26a]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                Generador de Tests
+              </button>
+              <button
+                onClick={() => setActiveTab('plans')}
+                className={`${
+                  activeTab === 'plans'
+                    ? 'border-[#91c26a] text-[#91c26a]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                Planes
+              </button>
+              <button
+                onClick={() => setActiveTab('discountCodes')}
+                className={`${
+                  activeTab === 'discountCodes'
+                    ? 'border-[#91c26a] text-[#91c26a]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                Códigos de Descuento
+              </button>
+              <button
+                onClick={() => setActiveTab('baremos')}
+                className={`${
+                  activeTab === 'baremos'
+                    ? 'border-[#91c26a] text-[#91c26a]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                Baremos
+              </button>
+            </nav>
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="mb-8">
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8">
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className={`${
-                    activeTab === 'dashboard'
-                      ? 'border-[#91c26a] text-[#91c26a]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  Dashboard
-                </button>
-                <button
-                  onClick={() => setActiveTab('tests')}
-                  className={`${
-                    activeTab === 'tests'
-                      ? 'border-[#91c26a] text-[#91c26a]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  Tests
-                </button>
-                <button
-                  onClick={() => setActiveTab('questions')}
-                  className={`${
-                    activeTab === 'questions'
-                      ? 'border-[#91c26a] text-[#91c26a]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  Preguntas
-                </button>
-                <button
-                  onClick={() => setActiveTab('testBlocks')}
-                  className={`${
-                    activeTab === 'testBlocks'
-                      ? 'border-[#91c26a] text-[#91c26a]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  Bloques de Test
-                </button>
-                <button
-                  onClick={() => setActiveTab('plans')}
-                  className={`${
-                    activeTab === 'plans'
-                      ? 'border-[#91c26a] text-[#91c26a]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  Planes
-                </button>
-                <button
-                  onClick={() => setActiveTab('discountCodes')}
-                  className={`${
-                    activeTab === 'discountCodes'
-                      ? 'border-[#91c26a] text-[#91c26a]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  Códigos de Descuento
-                </button>
-                <button
-                  onClick={() => setActiveTab('baremos')}
-                  className={`${
-                    activeTab === 'baremos'
-                      ? 'border-[#91c26a] text-[#91c26a]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  Baremos
-                </button>
-              </nav>
-            </div>
-          </div>
           {renderContent()}
         </div>
       </div>

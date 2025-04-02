@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, User, GraduationCap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -8,6 +8,12 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { currentUser: user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // No mostrar el navbar en la página de administración
+  if (location.pathname === '/admin') {
+    return null;
+  }
 
   const handleLogout = async () => {
     try {

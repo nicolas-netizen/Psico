@@ -87,37 +87,56 @@ export enum Aptitude {
   EMOTIONAL_INTELLIGENCE = 'Inteligencia Emocional'
 }
 
-import { Timestamp } from 'firebase/firestore';
-
 export interface Question {
-  question: string;
+  id: string;
+  text: string;
   options: string[];
   correctAnswer: number;
 }
 
+export interface TestBlock {
+  id: string;
+  title: string;
+  description?: string;
+  timeLimit: number; // Tiempo en minutos
+  questions: Question[];
+  type: 'verbal' | 'numerical' | 'abstract';
+}
+
 export interface Test {
-  id?: string;
+  id: string;
   title: string;
   description: string;
-  questions: Question[];
-  status: 'active' | 'inactive';
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  blocks: TestBlock[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TestResult {
-  id?: string;
+  id: string;
   testId: string;
   userId: string;
-  answers: number[];
   score: number;
-  createdAt: Timestamp;
+  completedAt: any;
+  testTitle: string;
+  timeSpent?: number;
+  answers?: Array<{
+    questionId: string;
+    answer: string;
+    isCorrect: boolean;
+  }>;
+}
+
+export interface BlockResult {
+  blockId: string;
+  timeSpent: number; // Tiempo usado en segundos
+  answers: { [questionId: string]: number };
+  score: number;
 }
 
 export interface TestOption {
   id: string;
   text: string;
-  isCorrect?: boolean;
 }
 
 export interface TestQuestion {

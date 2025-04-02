@@ -4,6 +4,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   User as FirebaseUser
 } from 'firebase/auth';
 import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -14,11 +16,13 @@ import { Plan } from '../types/Plan';
 interface AuthContextType {
   currentUser: FirebaseUser | null;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<string>;
+  login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  sendVerificationEmail: () => Promise<void>;
   getTestById: (testId: string) => Promise<Test>;
-  submitTestAnswers: (testId: string, answers: any[]) => Promise<void>;
+  submitTestResult: (testId: string, answers: any[]) => Promise<string>;
   getPlans: () => Promise<Plan[]>;
 }
 
@@ -35,22 +39,30 @@ const useAuth = () => {
 const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Función para verificar si un usuario es admin
+  const checkAdminStatus = async (uid: string) => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      const userData = userDoc.data();
+      return userData?.role === 'admin';
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      return false;
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          const isUserAdmin = userDoc.exists() && userDoc.data()?.role === 'admin';
-          setIsAdmin(isUserAdmin);
-        } catch (error) {
-          console.error('Error checking admin status:', error);
-          setIsAdmin(false);
-        }
+        const adminStatus = await checkAdminStatus(user.uid);
+        setIsAdmin(adminStatus);
       } else {
         setIsAdmin(false);
       }
+      setLoading(false);
     });
 
     return unsubscribe;
@@ -59,12 +71,8 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const login = async (email: string, password: string) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      const userData = userDoc.data();
-      const userRole = userData?.role || 'user';
-      const isUserAdmin = userRole === 'admin';
-      setIsAdmin(isUserAdmin);
-      return userRole;
+      const adminStatus = await checkAdminStatus(userCredential.user.uid);
+      setIsAdmin(adminStatus);
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -72,18 +80,40 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   };
 
   const register = async (email: string, password: string) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    // Crear documento de usuario con rol por defecto
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      email,
-      role: 'user',
-      createdAt: serverTimestamp()
-    });
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      if (userCredential.user) {
+        await sendEmailVerification(userCredential.user);
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          email,
+          role: 'user',
+          createdAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      console.error('Register error:', error);
+      throw error;
+    }
   };
 
   const logout = async () => {
-    await firebaseSignOut(auth);
-    setIsAdmin(false);
+    try {
+      await firebaseSignOut(auth);
+      setIsAdmin(false);
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
+  };
+
+  const sendVerificationEmail = async () => {
+    if (currentUser) {
+      await sendEmailVerification(currentUser);
+    }
   };
 
   const getTestById = async (testId: string): Promise<Test> => {
@@ -94,11 +124,23 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     return { id: testDoc.id, ...testDoc.data() } as Test;
   };
 
-  const submitTestAnswers = async (testId: string, answers: any[]) => {
+  const submitTestResult = async (testId: string, answers: any[]): Promise<string> => {
     if (!currentUser) throw new Error('User not authenticated');
     
-    const testResultRef = collection(db, 'testResults');
-    // Implementar la lógica de envío de respuestas
+    try {
+      const testResultRef = doc(collection(db, 'testResults'));
+      await setDoc(testResultRef, {
+        userId: currentUser.uid,
+        testId,
+        answers,
+        submittedAt: serverTimestamp()
+      });
+      
+      return testResultRef.id;
+    } catch (error) {
+      console.error('Error submitting test result:', error);
+      throw error;
+    }
   };
 
   const getPlans = async (): Promise<Plan[]> => {
@@ -120,14 +162,16 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     login,
     register,
     logout,
+    resetPassword,
+    sendVerificationEmail,
     getTestById,
-    submitTestAnswers,
+    submitTestResult,
     getPlans
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

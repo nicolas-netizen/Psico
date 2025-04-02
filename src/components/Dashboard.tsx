@@ -10,18 +10,6 @@ import {
   BarChart, Bar, PieChart, Pie, Cell
 } from 'recharts';
 
-interface Plan {
-  name: string;
-  duration: number;
-  startDate: any;
-  customTestsEnabled?: boolean;
-}
-
-interface User {
-  plan?: string;
-  planStartDate?: any;
-}
-
 interface Test {
   id: string;
   title: string;
@@ -46,14 +34,19 @@ interface TestResult {
   score: number;
   completedAt: any;
   testTitle: string;
+  answers: Array<{
+    blockName: string;
+    isCorrect: boolean;
+    questionId: string;
+  }>;
+  blocksUsed: string;
+  questionsAnswered: number;
 }
 
 interface BlockConfig {
   type: 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia';
   quantity: number;
 }
-
-const COLORS = ['#91c26a', '#fbbf24', '#ef4444'];
 
 interface PerformanceData {
   timeProgress: Array<{
@@ -65,12 +58,16 @@ interface PerformanceData {
   blockPerformance: Array<{
     name: string;
     value: number;
+    correct: number;
+    total: number;
   }>;
   categoryDistribution: Array<{
     name: string;
     value: number;
   }>;
 }
+
+const COLORS = ['#91c26a', '#fbbf24', '#ef4444'];
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -179,18 +176,23 @@ const Dashboard: React.FC = () => {
           );
           const resultsSnapshot = await getDocs(resultsQuery);
           
-          // Ordenamos los resultados en memoria
           const resultsData = resultsSnapshot.docs
-            .map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }))
+            .map(doc => {
+              const data = doc.data();
+              console.log('Resultado raw de Firestore:', data);
+              return {
+                id: doc.id,
+                ...data,
+                answers: data.answers || [] // Asegurarnos de que siempre haya un array de answers
+              };
+            })
             .sort((a: any, b: any) => {
               const dateA = a.completedAt?.toDate?.() || new Date(0);
               const dateB = b.completedAt?.toDate?.() || new Date(0);
               return dateB.getTime() - dateA.getTime();
             }) as TestResult[];
             
+          console.log('Resultados procesados:', resultsData);
           setUserResults(resultsData);
 
           // Procesar datos para los gráficos
@@ -211,48 +213,8 @@ const Dashboard: React.FC = () => {
             .reverse(); // Para mostrar progreso cronológico
 
           // Calcular rendimiento por bloque
-          const blockPerformanceMap = new Map();
-          for (const result of resultsData) {
-            if (!result.testId) continue;
-
-            try {
-              const testDoc = await getDoc(doc(db, 'tests', result.testId));
-              if (!testDoc.exists()) continue;
-
-              const testData = testDoc.data();
-              const questions = testData?.questions || [];
-              
-              questions.forEach((question: any, index: number) => {
-                if (!question || !question.blockName) return;
-                
-                const blockName = question.blockName;
-                if (!blockPerformanceMap.has(blockName)) {
-                  blockPerformanceMap.set(blockName, { correct: 0, total: 0 });
-                }
-                
-                const stats = blockPerformanceMap.get(blockName);
-                stats.total++;
-                
-                // Verificar que result.answers existe y tiene el índice
-                if (result.answers && Array.isArray(result.answers) && 
-                    result.answers[index] != null && question.correctAnswer != null) {
-                  if (result.answers[index] === question.correctAnswer) {
-                    stats.correct++;
-                  }
-                }
-              });
-            } catch (error) {
-              console.error(`Error al procesar test ${result.testId}:`, error);
-              continue;
-            }
-          }
-
-          const blockPerformanceData = Array.from(blockPerformanceMap.entries())
-            .filter(([name, stats]) => stats.total > 0) // Solo incluir bloques con datos
-            .map(([name, stats]) => ({
-              name,
-              value: Math.round((stats.correct / stats.total) * 100)
-            }));
+          const blockPerformanceData = calculateBlockPerformance(resultsData);
+          console.log('Rendimiento por bloque calculado:', blockPerformanceData);
 
           // Calcular distribución de categorías
           const categoryStats = resultsData
@@ -373,6 +335,112 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const calculateBlockPerformance = (results: TestResult[]): Array<{name: string; value: number; correct: number; total: number}> => {
+    console.log('Calculating block performance for results:', results);
+    const blockStats: { [key: string]: { correct: number; total: number; name: string } } = {};
+    
+    results.forEach(result => {
+      console.log('Processing result:', result);
+      if (!result.blocksUsed) {
+        console.log('No blocksUsed found for result:', result.id);
+        return;
+      }
+      
+      // Convertir blocksUsed en array de bloques
+      const blocks = result.blocksUsed.split(',').map(b => b.trim());
+      console.log('Blocks found:', blocks);
+      
+      blocks.forEach(blockName => {
+        if (!blockStats[blockName]) {
+          blockStats[blockName] = { correct: 0, total: 0, name: blockName };
+        }
+        
+        // Calcular aciertos basados en el score del test
+        const questionsForBlock = Math.ceil(result.questionsAnswered / blocks.length); // Redondeamos hacia arriba
+        const correctAnswers = Math.round((result.score / 100) * questionsForBlock);
+        
+        console.log(`Block ${blockName}: ${correctAnswers} correct out of ${questionsForBlock} questions`);
+        
+        blockStats[blockName].total += questionsForBlock;
+        blockStats[blockName].correct += correctAnswers;
+      });
+    });
+
+    console.log('Final block stats:', blockStats);
+
+    const processedData = Object.values(blockStats)
+      .map(stats => ({
+        name: stats.name,
+        value: Math.round((stats.correct / stats.total) * 100),
+        correct: stats.correct,
+        total: stats.total
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    console.log('Processed performance data:', processedData);
+    return processedData;
+  };
+
+  const BlockPerformanceChart: React.FC<{ data: Array<{name: string; value: number; correct: number; total: number}> }> = ({ data }) => {
+    console.log('Rendering BlockPerformanceChart with data:', data);
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <Activity className="w-5 h-5 mr-2 text-[#91c26a]" />
+          Rendimiento por Bloque
+        </h3>
+        {data.length === 0 ? (
+          <div className="h-64 flex items-center justify-center text-gray-500">
+            No hay datos de rendimiento disponibles
+          </div>
+        ) : (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fontSize: 12 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  domain={[0, 100]}
+                  tickFormatter={(value) => `${value}%`}
+                />
+                <Tooltip 
+                  formatter={(value: number, _name: string, props: any) => [
+                    `${value}% (${props.payload.correct}/${props.payload.total})`,
+                    'Rendimiento'
+                  ]}
+                />
+                <Bar 
+                  dataKey="value" 
+                  fill="#91c26a"
+                  name="Rendimiento"
+                  label={{
+                    position: 'top',
+                    formatter: (value: number) => `${value}%`,
+                    fontSize: 12
+                  }}
+                >
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.value >= 80 ? '#91c26a' : entry.value >= 60 ? '#fbbf24' : '#ef4444'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -470,30 +538,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Rendimiento por Bloque */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Activity className="w-5 h-5 mr-2 text-[#91c26a]" />
-            Rendimiento por Bloque
-          </h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={performanceData.blockPerformance}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="value" fill="#91c26a" name="Porcentaje de Aciertos">
-                  {performanceData.blockPerformance.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={
-                      entry.value >= 80 ? '#91c26a' :
-                      entry.value >= 60 ? '#fbbf24' : '#ef4444'
-                    } />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <BlockPerformanceChart data={performanceData.blockPerformance} />
 
         {/* Distribución de Resultados */}
         <div className="bg-white rounded-xl shadow-sm p-6 lg:col-span-2">

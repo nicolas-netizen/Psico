@@ -34,6 +34,7 @@ interface TestResult {
   score: number;
   completedAt: any;
   testTitle: string;
+  timeSpent: number;
   answers: Array<{
     blockName: string;
     isCorrect: boolean;
@@ -339,41 +340,65 @@ const Dashboard: React.FC = () => {
     console.log('Calculating block performance for results:', results);
     const blockStats: { [key: string]: { correct: number; total: number; name: string } } = {};
     
+    // Si no hay resultados, retornar array vacío
+    if (!results || results.length === 0) {
+      return [];
+    }
+
     results.forEach(result => {
-      console.log('Processing result:', result);
-      if (!result.blocksUsed) {
-        console.log('No blocksUsed found for result:', result.id);
+      if (!result?.answers || !Array.isArray(result.answers) || result.answers.length === 0) {
+        console.log('No valid answers found for result:', result?.id);
         return;
       }
+
+      // Agrupar respuestas por bloque
+      const blockAnswers: { [key: string]: { correct: number; total: number } } = {};
       
-      // Convertir blocksUsed en array de bloques
-      const blocks = result.blocksUsed.split(',').map(b => b.trim());
-      console.log('Blocks found:', blocks);
-      
-      blocks.forEach(blockName => {
+      result.answers.forEach(answer => {
+        if (!answer?.blockName) {
+          console.log('Invalid answer found:', answer);
+          return;
+        }
+
+        const blockName = answer.blockName.trim();
+        if (!blockAnswers[blockName]) {
+          blockAnswers[blockName] = { correct: 0, total: 0 };
+        }
+        
+        blockAnswers[blockName].total++;
+        if (answer.isCorrect === true) { // Validación explícita
+          blockAnswers[blockName].correct++;
+        }
+      });
+
+      // Actualizar estadísticas globales
+      Object.entries(blockAnswers).forEach(([blockName, stats]) => {
+        if (!blockName || typeof stats !== 'object') return;
+        
         if (!blockStats[blockName]) {
           blockStats[blockName] = { correct: 0, total: 0, name: blockName };
         }
         
-        // Calcular aciertos basados en el score del test
-        const questionsForBlock = Math.ceil(result.questionsAnswered / blocks.length); // Redondeamos hacia arriba
-        const correctAnswers = Math.round((result.score / 100) * questionsForBlock);
-        
-        console.log(`Block ${blockName}: ${correctAnswers} correct out of ${questionsForBlock} questions`);
-        
-        blockStats[blockName].total += questionsForBlock;
-        blockStats[blockName].correct += correctAnswers;
+        blockStats[blockName].correct += stats.correct || 0;
+        blockStats[blockName].total += stats.total || 0;
       });
     });
 
     console.log('Final block stats:', blockStats);
 
-    const processedData = Object.values(blockStats)
-      .map(stats => ({
-        name: stats.name,
-        value: Math.round((stats.correct / stats.total) * 100),
-        correct: stats.correct,
-        total: stats.total
+    const processedData = Object.entries(blockStats)
+      .filter(([name, stats]) => 
+        name && 
+        typeof stats === 'object' && 
+        stats.total > 0 && 
+        !isNaN(stats.correct) && 
+        !isNaN(stats.total)
+      )
+      .map(([name, stats]) => ({
+        name: name || 'Sin nombre',
+        value: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
+        correct: stats.correct || 0,
+        total: stats.total || 0
       }))
       .sort((a, b) => b.value - a.value);
 
@@ -383,20 +408,31 @@ const Dashboard: React.FC = () => {
 
   const BlockPerformanceChart: React.FC<{ data: Array<{name: string; value: number; correct: number; total: number}> }> = ({ data }) => {
     console.log('Rendering BlockPerformanceChart with data:', data);
+
+    // Validar que los datos sean válidos
+    const validData = data?.filter(item => 
+      item && 
+      typeof item === 'object' && 
+      typeof item.name === 'string' && 
+      !isNaN(item.value) && 
+      !isNaN(item.correct) && 
+      !isNaN(item.total)
+    ) || [];
+
     return (
       <div className="bg-white rounded-xl shadow-sm p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <Activity className="w-5 h-5 mr-2 text-[#91c26a]" />
           Rendimiento por Bloque
         </h3>
-        {data.length === 0 ? (
+        {!validData || validData.length === 0 ? (
           <div className="h-64 flex items-center justify-center text-gray-500">
             No hay datos de rendimiento disponibles
           </div>
         ) : (
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data}>
+              <BarChart data={validData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="name" 
@@ -412,7 +448,7 @@ const Dashboard: React.FC = () => {
                 />
                 <Tooltip 
                   formatter={(value: number, _name: string, props: any) => [
-                    `${value}% (${props.payload.correct}/${props.payload.total})`,
+                    `${value}% (${props.payload?.correct || 0}/${props.payload?.total || 0})`,
                     'Rendimiento'
                   ]}
                 />
@@ -422,11 +458,11 @@ const Dashboard: React.FC = () => {
                   name="Rendimiento"
                   label={{
                     position: 'top',
-                    formatter: (value: number) => `${value}%`,
+                    formatter: (value: number) => `${value || 0}%`,
                     fontSize: 12
                   }}
                 >
-                  {data.map((entry, index) => (
+                  {validData.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill={entry.value >= 80 ? '#91c26a' : entry.value >= 60 ? '#fbbf24' : '#ef4444'}

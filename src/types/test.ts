@@ -87,68 +87,75 @@ export enum Aptitude {
   EMOTIONAL_INTELLIGENCE = 'Inteligencia Emocional'
 }
 
-export interface Question {
+export interface Option {
   id: string;
-  text: string;
-  options: string[];
-  correctAnswer: number;
+  text?: string;
+  imageUrl?: string;
 }
 
-export interface TestBlock {
+export interface Question {
   id: string;
-  title: string;
+  type: 'text' | 'image' | 'mixed';  
+  text?: string;
+  imageUrl?: string;
+  options: Option[];
+  correctAnswer: number;
+  explanation?: string;
+  points?: number;
+}
+
+export interface Block {
+  id: string;
+  name: string;
   description?: string;
-  timeLimit: number; // Tiempo en minutos
   questions: Question[];
-  type: 'verbal' | 'numerical' | 'abstract';
+  timeLimit?: number;
+  showExplanation?: boolean;
+  imageUrls?: string[];  
 }
 
 export interface Test {
   id: string;
   title: string;
   description: string;
-  blocks: TestBlock[];
-  createdAt: string;
-  updatedAt: string;
+  blocks: Block[];
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
+  isPublic: boolean;
+  category?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  tags?: string[];
+  imageUrl?: string;  
 }
 
 export interface TestResult {
   id: string;
   testId: string;
   userId: string;
+  answers: Answer[];
   score: number;
-  completedAt: any;
-  testTitle: string;
+  completedAt: Date;
+  timeSpent: number;
+  blockResults: BlockResult[];
+}
+
+export interface Answer {
+  questionId: string;
+  selectedAnswer: number;
+  isCorrect: boolean;
   timeSpent?: number;
-  answers?: Array<{
-    questionId: string;
-    answer: string;
-    isCorrect: boolean;
-  }>;
 }
 
 export interface BlockResult {
   blockId: string;
-  timeSpent: number; // Tiempo usado en segundos
-  answers: { [questionId: string]: number };
   score: number;
+  timeSpent: number;
+  correctAnswers: number;
+  totalQuestions: number;
 }
 
-export interface TestOption {
-  id: string;
-  text: string;
-}
-
-export interface TestQuestion {
-  id: string;
-  text: string;
-  options: (string | { text: string; id?: string })[];
-  correctAnswer: number;
-  category?: string;
-  difficulty?: string;
-}
-
-export interface AptitudeQuestion extends TestQuestion {
+export interface AptitudeQuestion extends Question {
   category: AptitudeCategory;
   difficulty: AptitudeDifficulty;
 }

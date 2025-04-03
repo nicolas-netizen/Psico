@@ -139,6 +139,16 @@ function App() {
               } 
             />
             <Route 
+              path="/test" 
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <SolveTest />
+                  </Layout>
+                </PrivateRoute>
+              }
+            />
+            <Route 
               path="/test/:testId" 
               element={
                 <PrivateRoute>

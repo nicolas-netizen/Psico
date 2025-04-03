@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restablecer contraseña - PsicoTest</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f7eb;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .email-wrapper {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            margin: 20px 0;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+            padding: 20px;
+            background-color: #f8faf5;
+            border-radius: 8px;
+        }
+        .app-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #91c26a;
+            margin-bottom: 20px;
+        }
+        .title {
+            color: #2d3748;
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0 0 12px;
+        }
+        .subtitle {
+            color: #718096;
+            font-size: 18px;
+            margin: 0;
+        }
+        .content {
+            margin: 32px 0;
+            color: #4a5568;
+            font-size: 16px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #91c26a;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 16px 32px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 24px 0;
+            transition: background-color 0.2s;
+        }
+        .info-box {
+            background-color: #f8faf5;
+            border-left: 4px solid #91c26a;
+            padding: 16px;
+            margin: 24px 0;
+            border-radius: 4px;
+        }
+        .link-text {
+            background-color: #f8faf5;
+            padding: 12px;
+            border-radius: 4px;
+            word-break: break-all;
+            font-size: 14px;
+            color: #4a5568;
+            margin: 16px 0;
+        }
+        .footer {
+            text-align: center;
+            color: #718096;
+            font-size: 14px;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+        @media (max-width: 600px) {
+            .container {
+                padding: 16px;
+            }
+            .email-wrapper {
+                padding: 24px;
+            }
+            .button {
+                display: block;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <div class="header">
+                <div class="app-name">PsicoTest</div>
+                <h1 class="title">Restablece tu contraseña</h1>
+                <p class="subtitle">Sigue los pasos para crear una nueva contraseña</p>
+            </div>
+
+            <div class="content">
+                <p>Hola,</p>
+                <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en PsicoTest.</p>
+                
+                <div class="info-box">
+                    <p style="margin: 0;">⚠️ Por tu seguridad, este enlace expirará en 1 hora</p>
+                </div>
+
+                <p>Para crear una nueva contraseña, haz clic en el siguiente botón:</p>
+                
+                <center>
+                    <a href="%LINK%" class="button">
+                        Restablecer mi contraseña
+                    </a>
+                </center>
+
+                <p class="help-text">Si no solicitaste restablecer tu contraseña, puedes ignorar este correo. Tu cuenta está segura.</p>
+
+                <p class="help-text">Si tienes problemas con el botón, copia y pega este enlace en tu navegador:</p>
+                <div class="link-text">
+                    %LINK%
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>PsicoTest - Tu plataforma de evaluación psicológica</p>
+                <p style="margin-top: 8px; font-size: 12px;">Este es un correo automático, por favor no respondas a este mensaje.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

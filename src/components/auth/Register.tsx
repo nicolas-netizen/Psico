@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '../../firebase/firebaseConfig';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { GraduationCap, Eye, EyeOff } from 'lucide-react';
+import { GraduationCap, Eye, EyeOff, Copy } from 'lucide-react';
 
-const Register: React.FC = () => {
+const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [username, setUsername] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const { register } = useAuth();
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,130 +23,159 @@ const Register: React.FC = () => {
       return;
     }
 
-    setLoading(true);
+    if (username.length < 3) {
+      toast.error('El nombre de usuario debe tener al menos 3 caracteres');
+      return;
+    }
+
     try {
-      await register(email, password);
-      toast.success('Registro exitoso. Por favor, verifica tu correo electrónico.');
-      navigate('/login');
-    } catch (error) {
+      setLoading(true);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Actualizar el perfil del usuario con el nombre de usuario
+      await updateProfile(userCredential.user, {
+        displayName: username
+      });
+
+      toast.success('¡Cuenta creada con éxito!');
+      navigate('/dashboard');
+    } catch (error: any) {
       console.error('Error al registrar:', error);
-      toast.error('Error al crear la cuenta. Por favor, intenta de nuevo.');
+      if (error.code === 'auth/email-already-in-use') {
+        toast.error('Este correo ya está registrado');
+      } else if (error.code === 'auth/weak-password') {
+        toast.error('La contraseña debe tener al menos 6 caracteres');
+      } else {
+        toast.error('Error al crear la cuenta');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f0f7eb] to-[#e8f5e3] flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#e9f5db] via-white to-[#e9f5db] p-4">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 space-y-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#91c26a]/10 to-transparent" />
+        
+        <div className="relative">
+          {/* Icono y título */}
           <div className="text-center mb-8">
-            <div className="mx-auto w-16 h-16 bg-[#91c26a]/10 rounded-full flex items-center justify-center">
-              <GraduationCap className="h-10 w-10 text-[#91c26a]" />
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#91c26a]/20 mb-4">
+              <GraduationCap className="w-8 h-8 text-[#91c26a]" />
             </div>
-            <h1 className="mt-4 text-2xl font-bold text-gray-900">Crear una cuenta</h1>
-            <p className="mt-2 text-sm text-gray-600">Regístrate para comenzar</p>
+            <h1 className="text-2xl font-bold text-gray-900">Crear una cuenta</h1>
+            <p className="text-gray-600 mt-2">Regístrate para comenzar</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Nombre de usuario */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Correo electrónico
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre de usuario
               </label>
-              <div className="mt-1">
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
-                  placeholder="nombre@ejemplo.com"
-                />
-              </div>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#91c26a]/50 focus:border-[#91c26a] transition-colors"
+                placeholder="Tu nombre de usuario"
+                required
+              />
             </div>
 
+            {/* Correo electrónico */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                Correo electrónico
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#91c26a]/50 focus:border-[#91c26a] transition-colors"
+                placeholder="nombre@ejemplo.com"
+                required
+              />
+            </div>
+
+            {/* Contraseña */}
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                 Contraseña
               </label>
-              <div className="mt-1 relative">
+              <div className="relative">
                 <input
                   id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  required
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent pr-10"
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#91c26a]/50 focus:border-[#91c26a] transition-colors"
                   placeholder="••••••••"
+                  required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-400" />
-                  )}
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
 
+            {/* Confirmar contraseña */}
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
                 Confirmar contraseña
               </label>
-              <div className="mt-1 relative">
+              <div className="relative">
                 <input
                   id="confirmPassword"
-                  name="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  required
+                  type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent pr-10"
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#91c26a]/50 focus:border-[#91c26a] transition-colors"
                   placeholder="••••••••"
+                  required
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                 >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-400" />
-                  )}
+                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
 
+            {/* Botón de registro */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-[#91c26a] hover:bg-[#7ea756] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#91c26a] transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`w-full py-3 px-4 rounded-lg text-white font-medium transition-all duration-300
+                ${loading 
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-[#91c26a] to-[#82b35b] hover:from-[#82b35b] hover:to-[#73a44c] shadow-md hover:shadow-lg'
+                }`}
             >
               {loading ? (
-                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+                <div className="flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Creando cuenta...
+                </div>
               ) : (
                 'Crear cuenta'
               )}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-gray-600">
+          {/* Enlace para iniciar sesión */}
+          <p className="mt-6 text-center text-gray-600">
             ¿Ya tienes una cuenta?{' '}
-            <Link to="/login" className="font-medium text-[#91c26a] hover:text-[#7ea756]">
+            <Link to="/login" className="text-[#91c26a] hover:text-[#82b35b] font-medium">
               Inicia sesión aquí
             </Link>
           </p>

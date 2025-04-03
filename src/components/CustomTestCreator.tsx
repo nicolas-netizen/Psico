@@ -1,42 +1,79 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, addDoc, Timestamp, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus, Minus, BookOpen, CheckCircle } from 'lucide-react';
+import { Loader2, BookOpen, Calculator, Box, Wrench, Eye, Brain, Lightbulb } from 'lucide-react';
+import { BlockType, BLOCK_TYPES, BLOCK_NAMES } from '../types/blocks';
 
-interface Question {
+type QuestionType = 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia' | 'TextoImagen';
+
+interface BaseQuestion {
   id: string;
+  type: QuestionType;
+  blockType: BlockType;
   blockName: string;
-  text: string;
-  type: string;
-  options?: string[];
-  correctAnswer?: number;
+  isPublic: boolean;
+  createdAt: Date;
 }
+
+interface TextQuestion extends BaseQuestion {
+  type: 'Texto' | 'TextoImagen';
+  text: string;
+  options: string[];
+  correctAnswer: number;
+  imageUrl?: string;
+}
+
+interface MemoryQuestion extends BaseQuestion {
+  type: 'Memoria';
+  images: string[];
+  correctImageIndex: number;
+}
+
+interface DistractionQuestion extends BaseQuestion {
+  type: 'Distracción';
+  text: string;
+  options: string[];
+  correctAnswer: number;
+}
+
+interface SequenceQuestion extends BaseQuestion {
+  type: 'Secuencia';
+  sequence: string[];
+}
+
+type Question = TextQuestion | MemoryQuestion | DistractionQuestion | SequenceQuestion;
 
 interface SelectedBlock {
-  blockName: string;
+  blockName: BlockType;
   quantity: number;
+  timeLimit: number;
 }
+
+const blockIcons = {
+  AptitudVerbal: BookOpen,
+  AptitudNumerica: Calculator,
+  AptitudEspacial: Box,
+  AptitudMecanica: Wrench,
+  AptitudPerceptiva: Eye,
+  Memoria: Brain,
+  RazonamientoAbstracto: Lightbulb
+} as const;
 
 const CustomTestCreator = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [selectedBlocks, setSelectedBlocks] = useState<SelectedBlock[]>([]);
+  const [selectedBlocks, setSelectedBlocks] = useState<SelectedBlock[]>(
+    BLOCK_TYPES.map(type => ({
+      blockName: type,
+      quantity: 0,
+      timeLimit: 15 // tiempo por defecto en minutos
+    }))
+  );
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const [selectedTime, setSelectedTime] = useState(30); // tiempo en minutos
-
-  const timeOptions = [
-    { value: 15, label: '15 minutos' },
-    { value: 30, label: '30 minutos' },
-    { value: 45, label: '45 minutos' },
-    { value: 60, label: 'Una hora' },
-    { value: 90, label: 'Hora y media' },
-    { value: 120, label: 'Dos horas' },
-  ];
 
   useEffect(() => {
     loadQuestions();
@@ -44,285 +81,236 @@ const CustomTestCreator = () => {
 
   const loadQuestions = async () => {
     setLoading(true);
-    setError(null);
     try {
       const questionsRef = collection(db, 'questions');
       const querySnapshot = await getDocs(questionsRef);
-      const questionsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Question[];
+      const questionsData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date()
+        };
+      }) as Question[];
       setQuestions(questionsData);
     } catch (error) {
       console.error('Error loading questions:', error);
-      setError('Error al cargar las preguntas. Por favor, intenta de nuevo.');
       toast.error('Error al cargar las preguntas');
     } finally {
       setLoading(false);
     }
   };
 
-  const blockNames = [...new Set(questions.filter(q => q.blockName).map(q => q.blockName))];
-
-  const handleBlockSelection = (blockName: string, quantity: number) => {
-    setSelectedBlocks(prev => {
-      const existing = prev.find(b => b.blockName === blockName);
-      if (existing) {
-        if (quantity === 0) {
-          return prev.filter(b => b.blockName !== blockName);
-        }
-        return prev.map(b => 
-          b.blockName === blockName ? { ...b, quantity } : b
-        );
+  const handleQuantityChange = (blockName: BlockType, increment: boolean) => {
+    setSelectedBlocks(prev => prev.map(block => {
+      if (block.blockName === blockName) {
+        const newQuantity = increment ? block.quantity + 1 : Math.max(0, block.quantity - 1);
+        return { ...block, quantity: newQuantity };
       }
-      if (quantity > 0) {
-        return [...prev, { blockName, quantity }];
-      }
-      return prev;
-    });
+      return block;
+    }));
   };
 
-  const getTotalQuestions = () => {
-    return selectedBlocks.reduce((total, block) => total + block.quantity, 0);
+  const handleTimeChange = (blockName: BlockType, newTime: number) => {
+    setSelectedBlocks(prev => prev.map(block => {
+      if (block.blockName === blockName) {
+        return { ...block, timeLimit: Math.max(1, Math.min(60, newTime)) };
+      }
+      return block;
+    }));
   };
 
-  // Función para mezclar array usando Fisher-Yates
-  const shuffleArray = <T,>(array: T[]): T[] => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
+  // Type guards
+  const isTextQuestion = (question: Question): question is TextQuestion => {
+    return ['Texto', 'TextoImagen'].includes(question.type);
+  };
+
+  const isMemoryQuestion = (question: Question): question is MemoryQuestion => {
+    return question.type === 'Memoria';
+  };
+
+  const isSequenceQuestion = (question: Question): question is SequenceQuestion => {
+    return question.type === 'Secuencia';
+  };
+
+  const isDistractionQuestion = (question: Question): question is DistractionQuestion => {
+    return question.type === 'Distracción';
   };
 
   const createAndStartTest = async () => {
-    if (selectedBlocks.length === 0) {
-      toast.error('Selecciona al menos un bloque de preguntas');
+    const activeBlocks = selectedBlocks.filter(block => block.quantity > 0);
+    
+    if (activeBlocks.length === 0) {
+      toast.error('Por favor selecciona al menos un bloque de preguntas');
       return;
     }
 
-    setLoading(true);
     try {
       const selectedQuestions: Question[] = [];
       
-      for (const selected of selectedBlocks) {
-        const blockQuestions = questions.filter(q => q.blockName === selected.blockName);
+      for (const selected of activeBlocks) {
+        const blockQuestions = questions.filter(q => q.blockType === selected.blockName && q.isPublic);
         
         if (blockQuestions.length < selected.quantity) {
-          toast.error(`No hay suficientes preguntas disponibles en el bloque "${selected.blockName}"`);
+          toast.error(`No hay suficientes preguntas disponibles en el bloque "${BLOCK_NAMES[selected.blockName]}"`);
           return;
         }
 
-        const shuffled = shuffleArray(blockQuestions);
-        const selectedFromBlock = shuffled.slice(0, selected.quantity);
-        selectedQuestions.push(...selectedFromBlock);
-      }
-
-      // Mezclar también el orden final de las preguntas
-      const finalQuestions = shuffleArray(selectedQuestions);
-
-      if (finalQuestions.length === 0) {
-        throw new Error('No se encontraron preguntas para los bloques seleccionados');
+        const shuffled = [...blockQuestions].sort(() => Math.random() - 0.5);
+        selectedQuestions.push(...shuffled.slice(0, selected.quantity));
       }
 
       const tempTest = {
         title: 'Test Personalizado',
         description: 'Test creado con bloques personalizados',
-        questions: finalQuestions.map(q => ({
-          id: q.id,
-          text: q.text,
-          type: q.type,
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          blockName: q.blockName // Añadimos el nombre del bloque para la revisión
+        questions: selectedQuestions.map(q => {
+          const baseQuestion = {
+            id: q.id,
+            type: q.type,
+            blockType: q.blockType,
+            blockName: q.blockName
+          };
+
+          if (isTextQuestion(q)) {
+            return {
+              ...baseQuestion,
+              text: q.text,
+              options: q.options,
+              correctAnswer: q.correctAnswer,
+              imageUrl: q.imageUrl
+            };
+          } else if (isMemoryQuestion(q)) {
+            return {
+              ...baseQuestion,
+              images: q.images,
+              correctImageIndex: q.correctImageIndex
+            };
+          } else if (isSequenceQuestion(q)) {
+            return {
+              ...baseQuestion,
+              sequence: q.sequence
+            };
+          } else if (isDistractionQuestion(q)) {
+            return {
+              ...baseQuestion,
+              text: q.text,
+              options: q.options,
+              correctAnswer: q.correctAnswer
+            };
+          }
+
+          return baseQuestion;
+        }),
+        blocks: activeBlocks.map(block => ({
+          type: block.blockName,
+          count: block.quantity,
+          timeLimit: block.timeLimit * 60 // convertir a segundos
         })),
         createdAt: Timestamp.now(),
         type: 'temporary',
         status: 'active',
         isTemporary: true,
         userId: currentUser?.uid,
-        timeLimit: selectedTime * 60, // convertir a segundos
+        timeLimit: activeBlocks.reduce((total, block) => total + block.timeLimit * 60, 0), // tiempo total en segundos
       };
 
       const testRef = await addDoc(collection(db, 'temporaryTests'), tempTest);
-      
-      navigate(`/solve-test/${testRef.id}`, { 
-        state: { 
-          isTemporary: true,
-          selectedBlocks: selectedBlocks.map(b => b.blockName).join(', ')
-        } 
-      });
+      navigate(`/solve-test/${testRef.id}`);
     } catch (error) {
       console.error('Error creating test:', error);
-      toast.error('Error al crear el test: ' + (error instanceof Error ? error.message : 'Error desconocido'));
-    } finally {
-      setLoading(false);
+      toast.error('Error al crear el test');
     }
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <Loader2 className="w-12 h-12 animate-spin text-[#91c26a]" />
-        <p className="mt-4 text-gray-600">Cargando preguntas...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center max-w-md mx-auto p-8 bg-white rounded-lg shadow-md">
-          <p className="text-red-600 mb-4">{error}</p>
-          <button
-            onClick={loadQuestions}
-            className="px-4 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-all"
-          >
-            Intentar de nuevo
-          </button>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-[#91c26a]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="bg-white rounded-xl shadow-sm p-8 mb-8">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Crear Test Personalizado</h1>
-              <p className="text-gray-600">
-                Selecciona los bloques de preguntas y el tiempo límite para tu test
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-[#91c26a]">{getTotalQuestions()}</div>
-              <div className="text-sm text-gray-500">Preguntas seleccionadas</div>
-            </div>
-          </div>
+    <div className="max-w-4xl mx-auto p-6">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Crear Test Personalizado</h1>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {selectedBlocks.map((block) => {
+          const Icon = blockIcons[block.blockName];
+          const availableQuestions = questions.filter(q => q.blockType === block.blockName && q.isPublic).length;
+          
+          return (
+            <div
+              key={block.blockName}
+              className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
+            >
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2 bg-[#f0f7eb] rounded-lg">
+                  <Icon className="w-6 h-6 text-[#91c26a]" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-gray-900">
+                    {BLOCK_NAMES[block.blockName]}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {availableQuestions} preguntas disponibles
+                  </p>
+                </div>
+              </div>
 
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Tiempo del Test</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {timeOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setSelectedTime(option.value)}
-                  className={`p-3 rounded-lg text-center transition-all ${
-                    selectedTime === option.value
-                      ? 'bg-[#91c26a] text-white shadow-md'
-                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {blockNames.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {blockNames.map((blockName) => {
-                const blockQuestions = questions.filter(q => q.blockName === blockName);
-                const selected = selectedBlocks.find(b => b.blockName === blockName);
-                const isSelected = selected && selected.quantity > 0;
-                
-                return (
-                  <div 
-                    key={blockName} 
-                    className={`relative bg-white rounded-lg border-2 transition-all duration-200 ${
-                      isSelected ? 'border-[#91c26a] shadow-md' : 'border-gray-100 hover:border-gray-200'
-                    } p-6`}
-                  >
-                    {isSelected && (
-                      <div className="absolute top-4 right-4">
-                        <CheckCircle className="w-5 h-5 text-[#91c26a]" />
-                      </div>
-                    )}
-                    
-                    <div className="flex items-start space-x-4">
-                      <div className="bg-[#91c26a] bg-opacity-10 rounded-lg p-3">
-                        <BookOpen className="w-6 h-6 text-[#91c26a]" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{blockName}</h3>
-                        <p className="text-sm text-gray-500 mb-4">
-                          {blockQuestions.length} preguntas disponibles
-                        </p>
-                        
-                        <div className="flex items-center space-x-3">
-                          <button
-                            onClick={() => handleBlockSelection(blockName, Math.max(0, (selected?.quantity || 0) - 1))}
-                            className={`p-2 rounded-lg transition-colors ${
-                              !selected?.quantity 
-                                ? 'text-gray-300 cursor-not-allowed' 
-                                : 'text-gray-600 hover:bg-gray-100'
-                            }`}
-                            disabled={!selected?.quantity}
-                          >
-                            <Minus size={20} />
-                          </button>
-
-                          <input
-                            type="number"
-                            min="0"
-                            max={blockQuestions.length}
-                            value={selected?.quantity || 0}
-                            onChange={(e) => handleBlockSelection(blockName, parseInt(e.target.value) || 0)}
-                            className="w-16 p-2 text-center border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
-                          />
-
-                          <button
-                            onClick={() => handleBlockSelection(blockName, Math.min(blockQuestions.length, (selected?.quantity || 0) + 1))}
-                            className={`p-2 rounded-lg transition-colors ${
-                              selected?.quantity === blockQuestions.length 
-                                ? 'text-gray-300 cursor-not-allowed' 
-                                : 'text-gray-600 hover:bg-gray-100'
-                            }`}
-                            disabled={selected?.quantity === blockQuestions.length}
-                          >
-                            <Plus size={20} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-gray-600">Cantidad de preguntas:</label>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => handleQuantityChange(block.blockName, false)}
+                      className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100"
+                      disabled={block.quantity === 0}
+                    >
+                      -
+                    </button>
+                    <span className="w-8 text-center">{block.quantity}</span>
+                    <button
+                      onClick={() => handleQuantityChange(block.blockName, true)}
+                      className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100"
+                      disabled={block.quantity >= availableQuestions}
+                    >
+                      +
+                    </button>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 font-medium">
-                No hay bloques de preguntas disponibles
-              </p>
-              <p className="text-gray-500 text-sm mt-2">
-                El administrador debe crear preguntas y asignarlas a bloques
-              </p>
-            </div>
-          )}
-        </div>
+                </div>
 
-        <div className="flex justify-end">
-          <button
-            onClick={createAndStartTest}
-            disabled={loading || selectedBlocks.length === 0}
-            className="px-8 py-3 bg-[#91c26a] text-white rounded-lg font-semibold 
-                     hover:bg-[#82b35b] transition-all disabled:opacity-50 
-                     disabled:cursor-not-allowed shadow-sm hover:shadow-md"
-          >
-            {loading ? (
-              <span className="flex items-center">
-                <Loader2 className="animate-spin mr-2" size={20} />
-                Creando test...
-              </span>
-            ) : (
-              'Crear y Comenzar Test'
-            )}
-          </button>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-gray-600">Tiempo límite:</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={block.timeLimit}
+                      onChange={(e) => handleTimeChange(block.blockName, parseInt(e.target.value) || 1)}
+                      className="w-16 px-2 py-1 text-center border rounded"
+                    />
+                    <span className="text-sm text-gray-500">min</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-8 flex justify-between items-center">
+        <div className="text-gray-600">
+          <p>Tiempo total: {selectedBlocks.reduce((total, block) => total + (block.quantity > 0 ? block.timeLimit : 0), 0)} minutos</p>
+          <p>Preguntas totales: {selectedBlocks.reduce((total, block) => total + block.quantity, 0)}</p>
         </div>
+        <button
+          onClick={createAndStartTest}
+          className="px-6 py-3 bg-[#91c26a] text-white rounded-lg font-medium hover:bg-[#7ea756] transition-colors"
+        >
+          Crear y Comenzar Test
+        </button>
       </div>
     </div>
   );

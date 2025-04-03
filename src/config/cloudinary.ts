@@ -1,5 +1,5 @@
 export const cloudinaryConfig = {
-  cloudName: 'chapiri',
-  uploadPreset: 'your_upload_preset', // Necesitas crear un upload preset en tu dashboard de Cloudinary
-  apiKey: 'your_api_key' // Tu API Key de Cloudinary
+  cloudName: 'db6xthbpp',
+  apiKey: '376713226328455',
+  uploadPreset: 'psico_upload'  // Upload preset configurado en Cloudinary
 };

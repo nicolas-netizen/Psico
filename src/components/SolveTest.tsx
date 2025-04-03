@@ -54,6 +54,8 @@ const SolveTest = () => {
   const [showingMemoryImages, setShowingMemoryImages] = useState(false);
   const [memoryTimer, setMemoryTimer] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isTestFinished, setIsTestFinished] = useState(false);
+  const [testResult, setTestResult] = useState<{score: number, answers: any[], recommendation: string}>(); 
   const currentQuestion = test?.questions[currentQuestionIndex];
 
   useEffect(() => {
@@ -224,7 +226,14 @@ const SolveTest = () => {
             ? (question as MemoryQuestion).correctImageIndex 
             : (question as TextQuestion).correctAnswer
         ),
-        questionId: question.id
+        questionId: question.id,
+        question: question.type === 'Texto' || question.type === 'TextoImagen' 
+          ? (question as TextQuestion).text 
+          : 'Pregunta de memoria',
+        selectedAnswer: selectedAnswers[index],
+        correctAnswer: question.type === 'Memoria'
+          ? (question as MemoryQuestion).correctImageIndex
+          : (question as TextQuestion).correctAnswer
       }));
       
       // Guardar el resultado
@@ -238,7 +247,20 @@ const SolveTest = () => {
         questionsAnswered: test.questions.length
       });
 
-      navigate('/dashboard');
+      // Generar recomendación basada en el puntaje
+      let recommendation = '';
+      if (score >= 90) {
+        recommendation = '¡Excelente trabajo! Has demostrado un dominio sobresaliente. Sigue así y considera tomar tests más desafiantes.';
+      } else if (score >= 70) {
+        recommendation = 'Buen trabajo. Tienes un buen dominio del tema, pero hay espacio para mejorar en algunos aspectos específicos.';
+      } else if (score >= 50) {
+        recommendation = 'Has alcanzado un nivel básico. Te recomendamos repasar los temas en los que tuviste dificultades y volver a intentar el test.';
+      } else {
+        recommendation = 'Parece que algunos conceptos necesitan más atención. Te sugerimos revisar el material de estudio y practicar más antes de volver a intentar el test.';
+      }
+
+      setTestResult({ score, answers, recommendation });
+      setIsTestFinished(true);
       toast.success('Test completado con éxito');
     } catch (error) {
       console.error('Error submitting test:', error);
@@ -434,61 +456,120 @@ const SolveTest = () => {
       <div className="min-h-full w-full flex items-center justify-center p-3">
         <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg w-full max-w-2xl border border-gray-100">
           <div className="p-5">
-            {/* Timer Section */}
-            <div className="flex justify-between items-center mb-4">
-              <h1 className="text-lg font-semibold text-gray-700">Evaluación Psicológica</h1>
-              {timeLeft !== null && (
-                <div className="inline-flex items-center bg-gradient-to-r from-[#91c26a]/20 to-[#91c26a]/10 px-3 py-1.5 rounded-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#91c26a] mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div>
-                    <div className="text-lg font-bold text-gray-800">
-                      {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+            {isTestFinished && testResult ? (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Resultados del Test</h2>
+                  <div className="inline-flex items-center justify-center bg-gradient-to-r from-[#91c26a]/20 to-[#91c26a]/10 px-6 py-3 rounded-lg">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-gray-800">
+                        {testResult.score.toFixed(1)}%
+                      </div>
+                      <div className="text-sm text-[#91c26a] font-medium">Puntuación</div>
                     </div>
-                    <div className="text-xs text-[#91c26a] font-medium">Tiempo restante</div>
                   </div>
                 </div>
-              )}
-            </div>
 
-            {/* Question Section */}
-            <div>
-              {renderQuestion()}
-              {renderOptions()}
-            </div>
+                {/* Recomendación */}
+                <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Recomendación:</h3>
+                  <p className="text-gray-600">{testResult.recommendation}</p>
+                </div>
 
-            {/* Navigation Buttons */}
-            <div className="flex justify-between mt-6">
-              <button
-                onClick={previousQuestion}
-                disabled={currentQuestionIndex === 0}
-                className={`px-4 py-2 rounded-lg transition-colors
-                  ${currentQuestionIndex === 0
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
-                  }`}
-              >
-                Anterior
-              </button>
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-700">Detalle de respuestas:</h3>
+                  {testResult.answers.map((answer, index) => (
+                    <div key={index} className={`p-4 rounded-lg ${answer.isCorrect ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'}`}>
+                      <p className="font-medium text-gray-800 mb-2">{answer.question}</p>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className={answer.isCorrect ? 'text-green-600' : 'text-red-600'}>
+                          {answer.isCorrect ? '✓ Correcto' : '✗ Incorrecto'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-              {currentQuestionIndex === test.questions.length - 1 && !showingMemoryImages ? (
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="px-4 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg hover:from-[#82b35b] hover:to-[#73a44c] transition-colors disabled:opacity-50"
-                >
-                  {submitting ? 'Enviando...' : 'Finalizar Test'}
-                </button>
-              ) : !showingMemoryImages && (
-                <button
-                  onClick={nextQuestion}
-                  className="px-4 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg hover:from-[#82b35b] hover:to-[#73a44c] transition-colors"
-                >
-                  Siguiente
-                </button>
-              )}
-            </div>
+                <div className="flex justify-center gap-4 mt-6">
+                  {testResult.score < 70 && (
+                    <button
+                      onClick={() => {
+                        setIsTestFinished(false);
+                        setCurrentQuestionIndex(0);
+                        setSelectedAnswers([]);
+                      }}
+                      className="px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-colors"
+                    >
+                      Intentar de Nuevo
+                    </button>
+                  )}
+                  <button
+                    onClick={() => navigate('/dashboard')}
+                    className="px-6 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg hover:from-[#82b35b] hover:to-[#73a44c] transition-colors"
+                  >
+                    Volver al Dashboard
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Timer Section */}
+                <div className="flex justify-between items-center mb-4">
+                  <h1 className="text-lg font-semibold text-gray-700">Evaluación Psicológica</h1>
+                  {timeLeft !== null && (
+                    <div className="inline-flex items-center bg-gradient-to-r from-[#91c26a]/20 to-[#91c26a]/10 px-3 py-1.5 rounded-lg">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#91c26a] mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <div className="text-lg font-bold text-gray-800">
+                          {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                        </div>
+                        <div className="text-xs text-[#91c26a] font-medium">Tiempo restante</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Question Section */}
+                <div>
+                  {renderQuestion()}
+                  {renderOptions()}
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="flex justify-between mt-6">
+                  <button
+                    onClick={previousQuestion}
+                    disabled={currentQuestionIndex === 0}
+                    className={`px-4 py-2 rounded-lg transition-colors
+                      ${currentQuestionIndex === 0
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                      }`}
+                  >
+                    Anterior
+                  </button>
+
+                  {currentQuestionIndex === test.questions.length - 1 && !showingMemoryImages ? (
+                    <button
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                      className="px-4 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg hover:from-[#82b35b] hover:to-[#73a44c] transition-colors disabled:opacity-50"
+                    >
+                      {submitting ? 'Enviando...' : 'Finalizar Test'}
+                    </button>
+                  ) : !showingMemoryImages && (
+                    <button
+                      onClick={nextQuestion}
+                      className="px-4 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg hover:from-[#82b35b] hover:to-[#73a44c] transition-colors"
+                    >
+                      Siguiente
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

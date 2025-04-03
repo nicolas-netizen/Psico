@@ -12,26 +12,29 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    function hasCustomTestFeature() {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId != null &&
-            get(/databases/$(database)/documents/plans/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.planId)).data.hasCustomTest == true
-          )
-        );
+    function isVerifiedUser() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isTestOwner(testId) {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/tests/$(testId)) &&
-        get(/databases/$(database)/documents/tests/$(testId)).data.createdBy == request.auth.uid;
+    function isValidReport() {
+      let incomingData = request.resource.data;
+      return incomingData.userId == request.auth.uid &&
+             incomingData.type is string &&
+             incomingData.description is string &&
+             incomingData.status == 'pending' &&
+             incomingData.createdAt is timestamp &&
+             incomingData.updatedAt is timestamp;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    // Reports rules
+    match /reports/{reportId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isVerifiedUser() && isValidReport();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // User rules
@@ -44,27 +47,6 @@ service cloud.firestore {
     match /plans/{planId} {
       allow read: if true;
       allow write: if isAdmin();
-    }
-
-    // Discount codes rules
-    match /discountCodes/{codeId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    // Purchases rules
-    match /purchases/{purchaseId} {
-      allow read: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || isAdmin()
-      );
-      allow create: if isAuthenticated();
-      allow update, delete: if isAdmin();
-    }
-
-    // Questions rules
-    match /questions/{questionId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
     }
 
     // Test blocks rules
@@ -82,13 +64,6 @@ service cloud.firestore {
       );
     }
 
-    // Temporary tests rules
-    match /temporaryTests/{testId} {
-      allow create: if isAuthenticated();
-      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
-      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
-    }
-
     // Test results rules
     match /testResults/{resultId} {
       allow read: if isAuthenticated() && (
@@ -98,27 +73,6 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-    }
-
-    // Test sessions rules
-    match /testSessions/{sessionId} {
-      allow read: if isAuthenticated() && 
-        resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && 
-        resource.data.userId == request.auth.uid;
-      allow delete: if false;
-    }
-
-    // Baremo rules
-    match /baremo/{blockId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    // Other collections...
-    match /{document=**} {
-      allow read, write: if isAdmin();
     }
   }
 }

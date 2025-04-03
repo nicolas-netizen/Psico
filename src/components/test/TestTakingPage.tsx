@@ -1,54 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  ArrowRight, 
-  ArrowLeft 
-} from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 
-// Enum for question categories
-enum QuestionCategory {
-  MATHEMATICAL = 'MATHEMATICAL',
-  VERBAL = 'VERBAL',
-  LOGICAL = 'LOGICAL'
-}
-
-// Icons for different categories
-const categoryIcons = {
-  [QuestionCategory.MATHEMATICAL]: '🔢',
-  [QuestionCategory.VERBAL]: '📝',
-  [QuestionCategory.LOGICAL]: '🧩'
-};
-
-// Interface for a single question
 interface Question {
   id: string;
   text: string;
-  category: QuestionCategory;
+  blockType: string;
   options: string[];
   correctOption?: number;
 }
 
-// Interface for user's answer
+interface Test {
+  id: string;
+  title: string;
+  questions: Question[];
+}
+
 interface UserAnswer {
   questionId: string;
   selectedOption: number;
-  category: QuestionCategory;
+  blockType: string;
 }
 
 const TestTakingPage: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { getTestById, submitTestAnswers } = useAuth();
-
-  // State variables
-  const [test, setTest] = useState<{ 
-    id: string; 
-    title: string; 
-    questions: Question[] 
-  } | null>(null);
+  const { currentUser, getTestById, submitTestResult } = useAuth();
+  const [test, setTest] = useState<Test | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
 
@@ -63,7 +43,20 @@ const TestTakingPage: React.FC = () => {
         }
 
         const fetchedTest = await getTestById(testId);
-        setTest(fetchedTest);
+        if (fetchedTest && 'questions' in fetchedTest) {
+          const testData = {
+            id: fetchedTest.id,
+            title: fetchedTest.title,
+            questions: (fetchedTest.questions as any[]).map(q => ({
+              id: q.id,
+              text: q.text,
+              blockType: q.blockType,
+              options: q.options || [],
+              correctOption: q.correctOption
+            }))
+          };
+          setTest(testData);
+        }
       } catch (error) {
         console.error('Error fetching test:', error);
         toast.error('No se pudo cargar el test');
@@ -80,79 +73,92 @@ const TestTakingPage: React.FC = () => {
 
     const currentQuestion = test.questions[currentQuestionIndex];
     
-    // Update or add user answer
     setUserAnswers(prevAnswers => {
-      // Remove existing answer for this question if it exists
       const filteredAnswers = prevAnswers.filter(
         answer => answer.questionId !== currentQuestion.id
       );
 
-      // Add new answer
       return [
         ...filteredAnswers, 
         {
           questionId: currentQuestion.id,
           selectedOption: optionIndex,
-          category: currentQuestion.category
+          blockType: currentQuestion.blockType
         }
       ];
     });
   };
 
-  // Check if current question is answered
-  const isCurrentQuestionAnswered = () => {
-    if (!test) return false;
-    const currentQuestion = test.questions[currentQuestionIndex];
-    return userAnswers.some(
-      answer => answer.questionId === currentQuestion.id
-    );
-  };
-
-  // Navigation between questions
-  const goToNextQuestion = () => {
-    if (!test) return;
-    
-    // Ensure current question is answered
-    if (!isCurrentQuestionAnswered()) {
-      toast.error('Por favor, selecciona una respuesta antes de continuar');
-      return;
-    }
-
-    // Move to next question or submit test
-    if (currentQuestionIndex < test.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-    } else {
-      handleSubmitTest();
-    }
-  };
-
-  const goToPreviousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
-    }
-  };
-
   // Submit test
   const handleSubmitTest = async () => {
+    if (!test || !currentUser) return;
+
     try {
-      // Validate that all questions are answered
-      const unansweredQuestions = test?.questions.filter(
+      const unansweredQuestions = test.questions.filter(
         q => !userAnswers.some(a => a.questionId === q.id)
       );
 
-      if (unansweredQuestions && unansweredQuestions.length > 0) {
+      if (unansweredQuestions.length > 0) {
         toast.error(`Por favor, responda todas las preguntas. Faltan ${unansweredQuestions.length} preguntas por responder.`);
         return;
       }
 
-      // Submit answers
-      const result = await submitTestAnswers(test!.id, userAnswers);
+      // Calcular resultados
+      const results = {
+        testId: test.id,
+        userId: currentUser.uid,
+        score: 0,
+        answers: userAnswers.map(answer => {
+          const question = test.questions.find(q => q.id === answer.questionId);
+          const isCorrect = question?.correctOption === answer.selectedOption;
+          return {
+            questionId: answer.questionId,
+            isCorrect,
+            blockName: answer.blockType
+          };
+        }),
+        blocks: [] as { type: string; correct: number; total: number; }[]
+      };
+
+      // Calcular estadísticas por bloque
+      const blockStats = userAnswers.reduce((acc, answer) => {
+        const block = answer.blockType;
+        if (!acc[block]) {
+          acc[block] = { correct: 0, total: 0 };
+        }
+        const question = test.questions.find(q => q.id === answer.questionId);
+        if (question?.correctOption === answer.selectedOption) {
+          acc[block].correct++;
+        }
+        acc[block].total++;
+        return acc;
+      }, {} as Record<string, { correct: number; total: number; }>);
+
+      results.blocks = Object.entries(blockStats).map(([type, stats]) => ({
+        type,
+        correct: stats.correct,
+        total: stats.total
+      }));
+
+      // Calcular puntuación total
+      const totalCorrect = results.answers.filter(a => a.isCorrect).length;
+      results.score = Math.round((totalCorrect / test.questions.length) * 100);
+      
+      // Guardar resultados en Firestore
+      const resultId = await submitTestResult(test.id, results);
       
       // Navigate to results page
-      navigate(`/test-results/${result.id}`, { 
+      navigate(`/test-results/${resultId}`, { 
         state: { 
-          testResult: result, 
-          test 
+          testResult: {
+            id: resultId,
+            ...results
+          },
+          test: {
+            id: test.id,
+            title: test.title,
+            questions: test.questions
+          }
         } 
       });
     } catch (error) {
@@ -181,9 +187,6 @@ const TestTakingPage: React.FC = () => {
 
         <div className="mb-6">
           <div className="flex items-center mb-4">
-            <span className="mr-2 text-2xl">
-              {categoryIcons[currentQuestion.category]}
-            </span>
             <h2 className="text-xl font-semibold">
               {currentQuestion.text}
             </h2>
@@ -215,7 +218,7 @@ const TestTakingPage: React.FC = () => {
         <div className="flex justify-between mt-8">
           {currentQuestionIndex > 0 && (
             <button 
-              onClick={goToPreviousQuestion}
+              onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
               className="flex items-center bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
             >
               <ArrowLeft className="mr-2" /> Anterior
@@ -223,20 +226,10 @@ const TestTakingPage: React.FC = () => {
           )}
 
           <button 
-            onClick={goToNextQuestion}
-            className={`
-              flex items-center 
-              ${currentQuestionIndex === test.questions.length - 1 
-                ? 'bg-green-500 text-white' 
-                : 'bg-blue-500 text-white'
-              } 
-              px-4 py-2 rounded-lg hover:opacity-90 ml-auto
-            `}
+            onClick={handleSubmitTest}
+            className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg hover:opacity-90 ml-auto"
           >
-            {currentQuestionIndex === test.questions.length - 1 
-              ? 'Enviar Test' 
-              : 'Siguiente'
-            } 
+            Enviar Test
             <ArrowRight className="ml-2" />
           </button>
         </div>

@@ -11,6 +11,7 @@ import { Toaster } from 'react-hot-toast';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ResetPassword from './pages/ResetPassword';
+import ResetPasswordAction from './pages/ResetPasswordAction';
 
 // Componentes principales
 import Navbar from './components/Navbar';
@@ -86,10 +87,13 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            <Route path="/" element={<Layout><Home /></Layout>} />
+            <Route path="/" element={<Layout><PrivateRoute><Home /></PrivateRoute></Layout>} />
             <Route path="/login" element={<Layout><Login /></Layout>} />
             <Route path="/register" element={<Layout><Register /></Layout>} />
             <Route path="/reset-password" element={<Layout><ResetPassword /></Layout>} />
+            <Route path="/reset-password-action" element={<ResetPasswordAction />} />
+            {/* Ruta para la acción de Firebase Auth */}
+            <Route path="/__/auth/action" element={<ResetPasswordAction />} />
             <Route 
               path="/dashboard" 
               element={
@@ -151,21 +155,21 @@ function App() {
             <Route 
               path="/test/:testId" 
               element={
-                <PrivateRoute>
-                  <Layout>
+                <Layout>
+                  <PrivateRoute>
                     <TestTakingPage />
-                  </Layout>
-                </PrivateRoute>
+                  </PrivateRoute>
+                </Layout>
               }
             />
             <Route 
-              path="/test-results/:testId" 
+              path="/test-results/:resultId" 
               element={
-                <PrivateRoute>
-                  <Layout>
+                <Layout>
+                  <PrivateRoute>
                     <TestResultsPage />
-                  </Layout>
-                </PrivateRoute>
+                  </PrivateRoute>
+                </Layout>
               }
             />
             <Route 
@@ -201,11 +205,11 @@ function App() {
             <Route 
               path="/custom-test-creator" 
               element={
-                <PrivateRoute>
-                  <Layout>
+                <Layout>
+                  <PrivateRoute>
                     <CustomTestCreator />
-                  </Layout>
-                </PrivateRoute>
+                  </PrivateRoute>
+                </Layout>
               }
             />
           </Routes>

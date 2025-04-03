@@ -170,7 +170,7 @@ const Login: React.FC = () => {
             className="mt-6 space-y-4"
           >
             <div className="text-center">
-              <Link to="/forgot-password" className="text-sm text-[#91c26a] hover:text-[#82b35b]">
+              <Link to="/reset-password" className="text-sm text-[#91c26a] hover:text-[#82b35b]">
                 ¿Olvidaste tu contraseña?
               </Link>
             </div>

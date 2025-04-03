@@ -13,6 +13,22 @@ import { db, auth } from '../firebase/firebaseConfig';
 import { Test } from '../types/Test';
 import { Plan } from '../types/Plan';
 
+interface TestResult {
+  userId: string;
+  testId: string;
+  score: number;
+  answers: Array<{
+    questionId: string;
+    isCorrect: boolean;
+    blockName: string;
+  }>;
+  blocks: Array<{
+    type: string;
+    correct: number;
+    total: number;
+  }>;
+}
+
 interface AuthContextType {
   currentUser: FirebaseUser | null;
   isAdmin: boolean;
@@ -22,7 +38,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
   getTestById: (testId: string) => Promise<Test>;
-  submitTestResult: (testId: string, answers: any[]) => Promise<string>;
+  submitTestResult: (testId: string, result: TestResult) => Promise<string>;
   getPlans: () => Promise<Plan[]>;
 }
 
@@ -124,15 +140,13 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     return { id: testDoc.id, ...testDoc.data() } as Test;
   };
 
-  const submitTestResult = async (testId: string, answers: any[]): Promise<string> => {
+  const submitTestResult = async (testId: string, result: TestResult): Promise<string> => {
     if (!currentUser) throw new Error('User not authenticated');
     
     try {
       const testResultRef = doc(collection(db, 'testResults'));
       await setDoc(testResultRef, {
-        userId: currentUser.uid,
-        testId,
-        answers,
+        ...result,
         submittedAt: serverTimestamp()
       });
       

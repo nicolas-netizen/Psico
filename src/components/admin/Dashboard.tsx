@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from "react";
+import { useState, useEffect } from 'react';
 import { useNavigate } from "react-router-dom";
-import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, Timestamp } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, Timestamp, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
+import { useAuth } from '../../context/AuthContext';
+import { toast } from 'react-toastify';
 import { Users, BookOpen, Clock, Target, Award, TrendingUp, AlertCircle } from 'lucide-react';
 
 interface RecentTest {
@@ -18,7 +20,18 @@ interface UserActivity {
   planName: string;
 }
 
+interface Report {
+  id: string;
+  userId: string;
+  type: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'resolved';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 const AdminDashboard = () => {
+  const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -33,6 +46,7 @@ const AdminDashboard = () => {
   const [activeUsers, setActiveUsers] = useState<UserActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reports, setReports] = useState<Report[]>([]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -164,8 +178,78 @@ const AdminDashboard = () => {
       }
     };
 
+    const fetchReports = async () => {
+      try {
+        const reportsQuery = query(collection(db, 'reports'));
+        const querySnapshot = await getDocs(reportsQuery);
+        const reportsList = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Report[];
+
+        setReports(reportsList);
+      } catch (error) {
+        console.error('Error fetching reports:', error);
+      }
+    };
+
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+
     fetchDashboardData();
-  }, []);
+    fetchReports();
+  }, [currentUser, navigate]);
+
+  const handleUpdateReportStatus = async (reportId: string, newStatus: Report['status']) => {
+    try {
+      const reportRef = doc(db, 'reports', reportId);
+      await updateDoc(reportRef, {
+        status: newStatus,
+        updatedAt: new Date()
+      });
+
+      setReports(prevReports => 
+        prevReports.map(report => 
+          report.id === reportId 
+            ? { ...report, status: newStatus, updatedAt: new Date() }
+            : report
+        )
+      );
+
+      toast.success('Estado del reporte actualizado');
+    } catch (error) {
+      console.error('Error updating report:', error);
+      toast.error('Error al actualizar el estado del reporte');
+    }
+  };
+
+  const getStatusColor = (status: Report['status']) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800';
+      case 'resolved':
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusText = (status: Report['status']) => {
+    switch (status) {
+      case 'pending':
+        return 'Pendiente';
+      case 'in_progress':
+        return 'En Proceso';
+      case 'resolved':
+        return 'Resuelto';
+      default:
+        return status;
+    }
+  };
 
   const StatCard = ({ icon: Icon, title, value, description, color }: any) => (
     <div className="bg-white rounded-lg shadow-sm p-6">
@@ -282,6 +366,68 @@ const AdminDashboard = () => {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Reportes */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tipo
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Descripción
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Estado
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Fecha
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Acciones
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {reports.map((report) => (
+                <tr key={report.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize">
+                      {report.type}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900 max-w-xl overflow-hidden text-ellipsis">
+                      {report.description}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(report.status)}`}>
+                      {getStatusText(report.status)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {report.createdAt?.toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <select
+                      value={report.status}
+                      onChange={(e) => handleUpdateReportStatus(report.id, e.target.value as Report['status'])}
+                      className="text-sm rounded-lg border-gray-300 focus:ring-[#91c26a] focus:border-[#91c26a]"
+                    >
+                      <option value="pending">Pendiente</option>
+                      <option value="in_progress">En Proceso</option>
+                      <option value="resolved">Resuelto</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

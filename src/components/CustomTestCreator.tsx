@@ -7,44 +7,24 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, BookOpen, Calculator, Box, Wrench, Eye, Brain, Lightbulb } from 'lucide-react';
 import { BlockType, BLOCK_TYPES, BLOCK_NAMES } from '../types/blocks';
 
-type QuestionType = 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia' | 'TextoImagen';
-
 interface BaseQuestion {
   id: string;
-  type: QuestionType;
+  type: string;
   blockType: BlockType;
   blockName: string;
   isPublic: boolean;
   createdAt: Date;
 }
 
-interface TextQuestion extends BaseQuestion {
-  type: 'Texto' | 'TextoImagen';
-  text: string;
-  options: string[];
-  correctAnswer: number;
+interface Question extends BaseQuestion {
+  text?: string;
+  options?: string[];
+  correctAnswer?: number;
   imageUrl?: string;
+  images?: string[];
+  correctImageIndex?: number;
+  sequence?: string[];
 }
-
-interface MemoryQuestion extends BaseQuestion {
-  type: 'Memoria';
-  images: string[];
-  correctImageIndex: number;
-}
-
-interface DistractionQuestion extends BaseQuestion {
-  type: 'Distracción';
-  text: string;
-  options: string[];
-  correctAnswer: number;
-}
-
-interface SequenceQuestion extends BaseQuestion {
-  type: 'Secuencia';
-  sequence: string[];
-}
-
-type Question = TextQuestion | MemoryQuestion | DistractionQuestion | SequenceQuestion;
 
 interface SelectedBlock {
   blockName: BlockType;
@@ -120,86 +100,78 @@ const CustomTestCreator = () => {
     }));
   };
 
-  // Type guards
-  const isTextQuestion = (question: Question): question is TextQuestion => {
-    return ['Texto', 'TextoImagen'].includes(question.type);
+  const shuffleArray = (array: any[]) => {
+    return array.sort(() => Math.random() - 0.5);
   };
 
-  const isMemoryQuestion = (question: Question): question is MemoryQuestion => {
-    return question.type === 'Memoria';
-  };
-
-  const isSequenceQuestion = (question: Question): question is SequenceQuestion => {
-    return question.type === 'Secuencia';
-  };
-
-  const isDistractionQuestion = (question: Question): question is DistractionQuestion => {
-    return question.type === 'Distracción';
-  };
-
-  const createAndStartTest = async () => {
-    const activeBlocks = selectedBlocks.filter(block => block.quantity > 0);
-    
-    if (activeBlocks.length === 0) {
-      toast.error('Por favor selecciona al menos un bloque de preguntas');
-      return;
-    }
-
+  const handleCreateTest = async () => {
     try {
-      const selectedQuestions: Question[] = [];
-      
-      for (const selected of activeBlocks) {
-        const blockQuestions = questions.filter(q => q.blockType === selected.blockName && q.isPublic);
+      // Validar que al menos un bloque tenga preguntas
+      const activeBlocks = selectedBlocks.filter(block => block.quantity > 0);
+      if (activeBlocks.length === 0) {
+        toast.error('Debes seleccionar al menos un bloque con preguntas');
+        return;
+      }
+
+      // Obtener preguntas aleatorias para cada bloque
+      const selectedQuestions = activeBlocks.flatMap(block => {
+        const blockQuestions = questions.filter(q => 
+          q.blockType === block.blockName && q.isPublic
+        );
         
-        if (blockQuestions.length < selected.quantity) {
-          toast.error(`No hay suficientes preguntas disponibles en el bloque "${BLOCK_NAMES[selected.blockName]}"`);
-          return;
+        if (blockQuestions.length < block.quantity) {
+          throw new Error(`No hay suficientes preguntas disponibles para el bloque ${BLOCK_NAMES[block.blockName]}`);
         }
 
-        const shuffled = [...blockQuestions].sort(() => Math.random() - 0.5);
-        selectedQuestions.push(...shuffled.slice(0, selected.quantity));
-      }
+        return shuffleArray(blockQuestions).slice(0, block.quantity);
+      });
 
       const tempTest = {
         title: 'Test Personalizado',
-        description: 'Test creado con bloques personalizados',
-        questions: selectedQuestions.map(q => {
-          const baseQuestion = {
-            id: q.id,
-            type: q.type,
-            blockType: q.blockType,
-            blockName: q.blockName
+        description: 'Test personalizado creado por el usuario',
+        questions: selectedQuestions.map(question => {
+          // Objeto base con campos comunes
+          const baseFields = {
+            id: question.id,
+            type: question.type,
+            blockType: question.blockType,
+            blockName: question.blockName,
+            isPublic: question.isPublic,
+            createdAt: question.createdAt || new Date()
           };
 
-          if (isTextQuestion(q)) {
-            return {
-              ...baseQuestion,
-              text: q.text,
-              options: q.options,
-              correctAnswer: q.correctAnswer,
-              imageUrl: q.imageUrl
+          // Campos específicos según el tipo de pregunta
+          let specificFields = {};
+          
+          if (question.type === 'Texto' || question.type === 'TextoImagen') {
+            specificFields = {
+              text: question.text || '',
+              options: question.options || [],
+              correctAnswer: question.correctAnswer || 0,
+              imageUrl: question.imageUrl || null
             };
-          } else if (isMemoryQuestion(q)) {
-            return {
-              ...baseQuestion,
-              images: q.images,
-              correctImageIndex: q.correctImageIndex
+          } else if (question.type === 'Memoria') {
+            specificFields = {
+              images: question.images || [],
+              correctImageIndex: question.correctImageIndex || 0
             };
-          } else if (isSequenceQuestion(q)) {
-            return {
-              ...baseQuestion,
-              sequence: q.sequence
+          } else if (question.type === 'Distracción') {
+            specificFields = {
+              text: question.text || '',
+              options: question.options || [],
+              correctAnswer: question.correctAnswer || 0
             };
-          } else if (isDistractionQuestion(q)) {
-            return {
-              ...baseQuestion,
-              text: q.text,
-              options: q.options,
-              correctAnswer: q.correctAnswer
+          } else if (question.type === 'Secuencia') {
+            specificFields = {
+              sequence: question.sequence || []
             };
           }
 
-          return baseQuestion;
+          // Combinar campos base con campos específicos
+          return {
+            ...baseFields,
+            ...specificFields
+          };
         }),
         blocks: activeBlocks.map(block => ({
           type: block.blockName,
@@ -210,8 +182,8 @@ const CustomTestCreator = () => {
         type: 'temporary',
         status: 'active',
         isTemporary: true,
-        userId: currentUser?.uid,
-        timeLimit: activeBlocks.reduce((total, block) => total + block.timeLimit * 60, 0), // tiempo total en segundos
+        userId: currentUser?.uid || '',
+        timeLimit: activeBlocks.reduce((total, block) => total + block.timeLimit * 60, 0) // tiempo total en segundos
       };
 
       const testRef = await addDoc(collection(db, 'temporaryTests'), tempTest);
@@ -306,7 +278,7 @@ const CustomTestCreator = () => {
           <p>Preguntas totales: {selectedBlocks.reduce((total, block) => total + block.quantity, 0)}</p>
         </div>
         <button
-          onClick={createAndStartTest}
+          onClick={handleCreateTest}
           className="px-6 py-3 bg-[#91c26a] text-white rounded-lg font-medium hover:bg-[#7ea756] transition-colors"
         >
           Crear y Comenzar Test

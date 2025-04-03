@@ -1,14 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
-import { Brain, Clock, Trophy, ChevronRight, Plus, Calendar, TrendingUp, Activity, Settings } from 'lucide-react';
 import { toast } from 'react-toastify';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell
+  ResponsiveContainer,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Cell,
+  Legend,
+  LineChart,
+  Line,
+  PieChart,
+  Pie
 } from 'recharts';
+import {
+  Brain,
+  Clock,
+  Trophy,
+  ChevronRight,
+  Plus,
+  Calendar,
+  Settings,
+  AlertCircle
+} from 'lucide-react';
 
 interface Test {
   id: string;
@@ -40,6 +58,11 @@ interface TestResult {
     isCorrect: boolean;
     questionId: string;
   }>;
+  blocks?: Array<{
+    type: string;
+    total: number;
+    correct: number;
+  }>;
   blocksUsed: string;
   questionsAnswered: number;
 }
@@ -49,6 +72,14 @@ interface BlockConfig {
   quantity: number;
 }
 
+interface BlockPerformance {
+  name: string;
+  score: number;
+  value: number;  // For chart compatibility
+  correct: number;
+  total: number;
+}
+
 interface PerformanceData {
   timeProgress: Array<{
     date: string;
@@ -56,16 +87,16 @@ interface PerformanceData {
     timeSpent: number;
     timeFormatted: string;
   }>;
-  blockPerformance: Array<{
-    name: string;
-    value: number;
-    correct: number;
-    total: number;
-  }>;
+  blockPerformance: BlockPerformance[];
   categoryDistribution: Array<{
     name: string;
     value: number;
   }>;
+}
+
+interface ReportData {
+  type: string;
+  description: string;
 }
 
 const COLORS = ['#91c26a', '#fbbf24', '#ef4444'];
@@ -104,6 +135,14 @@ const Dashboard: React.FC = () => {
     blockPerformance: [],
     categoryDistribution: []
   });
+
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportData, setReportData] = useState<ReportData>({
+    type: '',
+    description: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCreatingTest, setIsCreatingTest] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -222,8 +261,8 @@ const Dashboard: React.FC = () => {
             .filter(result => result.score != null)
             .reduce((acc: any, result) => {
               const score = Number(result.score) || 0;
-              const category = score >= 80 ? 'Excelente' :
-                             score >= 60 ? 'Bueno' : 'Necesita Mejora';
+              const category = score >= 80 ? 'Memoria' :
+                             score >= 60 ? 'Secuencia' : 'Texto';
               acc[category] = (acc[category] || 0) + 1;
               return acc;
             }, {});
@@ -257,27 +296,52 @@ const Dashboard: React.FC = () => {
     fetchData();
   }, [currentUser, navigate]);
 
-  const handleCreateCustomTest = () => {
-    if (!userPlan?.customTestsEnabled) {
-      toast.error('Tu plan actual no incluye la creación de tests personalizados. Actualiza tu plan para acceder a esta función.');
-      navigate('/plans');
-      return;
+  const handleCreateCustomTest = async () => {
+    setIsCreatingTest(true);
+
+    try {
+      // Crear el nuevo test
+      const newTest = {
+        createdBy: currentUser!.uid,
+        createdAt: new Date(),
+        type: 'custom',
+        userId: currentUser!.uid,
+        title: customTest.title,
+        description: customTest.description,
+        timeLimit: customTest.timeLimit,
+        blocks: customTest.blocks,
+        memorizeTime: customTest.memorizeTime,
+        distractionTime: customTest.distractionTime,
+        isPublic: customTest.isPublic
+      };
+
+      const testRef = await addDoc(collection(db, 'tests'), newTest);
+      const testWithId = { id: testRef.id, ...newTest };
+      
+      toast.success('Test creado exitosamente');
+      setShowCustomizeModal(false);
+      setCustomTest({
+        title: '',
+        description: '',
+        timeLimit: 30,
+        blocks: [],
+        memorizeTime: 60,
+        distractionTime: 30,
+        isPublic: false
+      });
+
+      // Actualizar la lista de tests disponibles
+      setAvailableTests(prev => [...prev, testWithId]);
+    } catch (error) {
+      console.error('Error creating custom test:', error);
+      toast.error('Error al crear el test personalizado');
+    } finally {
+      setIsCreatingTest(false);
     }
-    navigate('/custom-test-creator');
   };
 
   const handleStartTest = (testId: string) => {
     navigate(`/test/${testId}`);
-  };
-
-  const handleStartRandomTest = async () => {
-    try {
-      // Implementación del inicio de test aleatorio
-      console.log('Starting random test...');
-    } catch (error) {
-      console.error('Error starting random test:', error);
-      toast.error('Error al iniciar el test aleatorio');
-    }
   };
 
   const addBlock = () => {
@@ -295,186 +359,147 @@ const Dashboard: React.FC = () => {
     }));
   };
 
-  const handleCreateCustomTestSubmit = async () => {
-    try {
-      if (customTest.blocks.length === 0) {
-        toast.error('Debes agregar al menos un bloque al test');
-        return;
-      }
-
-      if (!customTest.title.trim()) {
-        toast.error('El test debe tener un título');
-        return;
-      }
-
-      const newTest = {
-        ...customTest,
-        createdBy: currentUser!.uid,
-        createdAt: new Date(),
-        type: 'custom',
-        userId: currentUser!.uid
-      };
-
-      const testRef = await addDoc(collection(db, 'tests'), newTest);
-      toast.success('Test creado exitosamente');
-      setShowCustomizeModal(false);
-      setCustomTest({
-        title: '',
-        description: '',
-        timeLimit: 30,
-        blocks: [],
-        memorizeTime: 30,
-        distractionTime: 15,
-        isPublic: false
-      });
-
-      // Actualizar la lista de tests disponibles
-      setAvailableTests(prev => [...prev, { id: testRef.id, ...newTest }]);
-    } catch (error) {
-      console.error('Error creating custom test:', error);
-      toast.error('Error al crear el test personalizado');
-    }
-  };
-
-  const calculateBlockPerformance = (results: TestResult[]): Array<{name: string; value: number; correct: number; total: number}> => {
-    console.log('Calculating block performance for results:', results);
-    const blockStats: { [key: string]: { correct: number; total: number; name: string } } = {};
-    
-    // Si no hay resultados, retornar array vacío
+  const calculateBlockPerformance = (results: TestResult[]): BlockPerformance[] => {
     if (!results || results.length === 0) {
       return [];
     }
 
+    const blockPerformance: { [key: string]: { total: number; correct: number; attempts: number } } = {};
+
     results.forEach(result => {
-      if (!result?.answers || !Array.isArray(result.answers) || result.answers.length === 0) {
-        console.log('No valid answers found for result:', result?.id);
+      if (result.answers && Array.isArray(result.answers)) {
+        const blockStats = result.answers.reduce((acc, answer) => {
+          const blockName = answer.blockName || 'Sin bloque';
+          if (!acc[blockName]) {
+            acc[blockName] = { total: 0, correct: 0 };
+          }
+          acc[blockName].total += 1;
+          if (answer.isCorrect) {
+            acc[blockName].correct += 1;
+          }
+          return acc;
+        }, {} as { [key: string]: { total: number; correct: number } });
+
+        Object.entries(blockStats).forEach(([blockName, stats]) => {
+          if (!blockPerformance[blockName]) {
+            blockPerformance[blockName] = { total: 0, correct: 0, attempts: 0 };
+          }
+          blockPerformance[blockName].total += stats.total;
+          blockPerformance[blockName].correct += stats.correct;
+          blockPerformance[blockName].attempts += 1;
+        });
+      }
+    });
+
+    return Object.entries(blockPerformance)
+      .map(([name, stats]) => {
+        const score = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+        return {
+          name,
+          score,
+          value: score, // For chart compatibility
+          correct: stats.correct,
+          total: stats.total
+        };
+      })
+      .filter(block => block.score > 0);
+  };
+
+  const calculateUserStats = (results: TestResult[]) => {
+    if (!results || results.length === 0) {
+      return {
+        averageScore: 0,
+        completedTests: 0,
+        totalStudyTime: 0
+      };
+    }
+
+    const totalScore = results.reduce((sum, result) => sum + (result.score || 0), 0);
+    const totalTime = results.reduce((sum, result) => sum + (result.timeSpent || 0), 0); // en segundos
+    
+    return {
+      averageScore: Math.round(totalScore / results.length),
+      completedTests: results.length,
+      totalStudyTime: totalTime
+    };
+  };
+
+  const formatStudyTime = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else {
+      return `${minutes}m`;
+    }
+  };
+
+  const BlockPerformance = ({ data }: { data: BlockPerformance[] }) => {
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <h3 className="text-lg font-semibold mb-4">Rendimiento por Bloque</h3>
+        <div className="space-y-4">
+          {data.map((block, index) => (
+            <div key={index} className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>{block.name}</span>
+                <span>{block.score}%</span>
+              </div>
+              <div className="h-2 bg-gray-200 rounded-full">
+                <div
+                  className="h-2 bg-[#91c26a] rounded-full"
+                  style={{ width: `${block.score}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const handleSubmitReport = async (reportData: ReportData) => {
+    setIsSubmitting(true);
+
+    try {
+      if (!currentUser?.uid) {
+        toast.error('Debes iniciar sesión para enviar reportes');
         return;
       }
 
-      // Agrupar respuestas por bloque
-      const blockAnswers: { [key: string]: { correct: number; total: number } } = {};
+      if (!reportData.type || !reportData.description) {
+        toast.error('Por favor completa todos los campos del reporte');
+        return;
+      }
+
+      const newReport = {
+        userId: currentUser.uid,
+        type: reportData.type.trim(),
+        description: reportData.description.trim(),
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        email: currentUser.email || 'No disponible',
+        userName: currentUser.displayName || 'Usuario sin nombre'
+      };
+
+      const reportsRef = collection(db, 'reports');
+      await addDoc(reportsRef, newReport);
       
-      result.answers.forEach(answer => {
-        if (!answer?.blockName) {
-          console.log('Invalid answer found:', answer);
-          return;
-        }
-
-        const blockName = answer.blockName.trim();
-        if (!blockAnswers[blockName]) {
-          blockAnswers[blockName] = { correct: 0, total: 0 };
-        }
-        
-        blockAnswers[blockName].total++;
-        if (answer.isCorrect === true) { // Validación explícita
-          blockAnswers[blockName].correct++;
-        }
-      });
-
-      // Actualizar estadísticas globales
-      Object.entries(blockAnswers).forEach(([blockName, stats]) => {
-        if (!blockName || typeof stats !== 'object') return;
-        
-        if (!blockStats[blockName]) {
-          blockStats[blockName] = { correct: 0, total: 0, name: blockName };
-        }
-        
-        blockStats[blockName].correct += stats.correct || 0;
-        blockStats[blockName].total += stats.total || 0;
-      });
-    });
-
-    console.log('Final block stats:', blockStats);
-
-    const processedData = Object.entries(blockStats)
-      .filter(([name, stats]) => 
-        name && 
-        typeof stats === 'object' && 
-        stats.total > 0 && 
-        !isNaN(stats.correct) && 
-        !isNaN(stats.total)
-      )
-      .map(([name, stats]) => ({
-        name: name || 'Sin nombre',
-        value: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
-        correct: stats.correct || 0,
-        total: stats.total || 0
-      }))
-      .sort((a, b) => b.value - a.value);
-
-    console.log('Processed performance data:', processedData);
-    return processedData;
-  };
-
-  const BlockPerformanceChart: React.FC<{ data: Array<{name: string; value: number; correct: number; total: number}> }> = ({ data }) => {
-    console.log('Rendering BlockPerformanceChart with data:', data);
-
-    // Validar que los datos sean válidos
-    const validData = data?.filter(item => 
-      item && 
-      typeof item === 'object' && 
-      typeof item.name === 'string' && 
-      !isNaN(item.value) && 
-      !isNaN(item.correct) && 
-      !isNaN(item.total)
-    ) || [];
-
-    return (
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Activity className="w-5 h-5 mr-2 text-[#91c26a]" />
-          Rendimiento por Bloque
-        </h3>
-        {!validData || validData.length === 0 ? (
-          <div className="h-64 flex items-center justify-center text-gray-500">
-            No hay datos de rendimiento disponibles
-          </div>
-        ) : (
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={validData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="name" 
-                  tick={{ fontSize: 12 }}
-                  interval={0}
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis 
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                />
-                <Tooltip 
-                  formatter={(value: number, _name: string, props: any) => [
-                    `${value}% (${props.payload?.correct || 0}/${props.payload?.total || 0})`,
-                    'Rendimiento'
-                  ]}
-                />
-                <Bar 
-                  dataKey="value" 
-                  fill="#91c26a"
-                  name="Rendimiento"
-                  label={{
-                    position: 'top',
-                    formatter: (value: number) => `${value || 0}%`,
-                    fontSize: 12
-                  }}
-                >
-                  {validData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.value >= 80 ? '#91c26a' : entry.value >= 60 ? '#fbbf24' : '#ef4444'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
-    );
+      toast.success('Reporte enviado exitosamente');
+      setShowReportModal(false);
+      setReportData({ type: '', description: '' });
+    } catch (error: any) {
+      console.error('Error sending report:', error);
+      if (error.code === 'permission-denied') {
+        toast.error('No tienes permisos para enviar reportes. Por favor, verifica tu sesión.');
+      } else {
+        toast.error('Error al enviar el reporte. Por favor, intenta nuevamente.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -489,23 +514,26 @@ const Dashboard: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Bienvenido, {currentUser?.email}
+        <div className="flex flex-col items-start space-y-2">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-[#91c26a] to-[#82b35b] bg-clip-text text-transparent">
+            Bienvenido, {currentUser?.displayName || 'Usuario'}
           </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Aquí puedes ver tus estadísticas, tests disponibles y crear tests personalizados.
-          </p>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-600">Correo:</span>
+            <span className="text-sm text-gray-800 bg-gray-100 px-3 py-1 rounded-full">
+              {currentUser?.email}
+            </span>
+          </div>
         </div>
 
         {userPlan && (
-          <div className="mt-4 md:mt-0 bg-white rounded-lg shadow-sm p-4 flex items-center space-x-4">
+          <div className="mt-4 md:mt-0 bg-gradient-to-br from-white to-[#e9f5db] rounded-lg shadow-sm p-4 flex items-center space-x-4 border border-[#91c26a]/20">
             <div className="bg-[#91c26a] bg-opacity-10 p-2 rounded-full">
               <Calendar className="h-6 w-6 text-[#91c26a]" />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900">{userPlan.name}</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[#91c26a]">
                 {daysLeft} días restantes
               </p>
             </div>
@@ -514,57 +542,88 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+      <div className="bg-gradient-to-br from-white to-[#e9f5db] rounded-lg shadow-sm p-6 mb-8">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
         <div className="flex flex-wrap gap-4">
           <button
-            onClick={handleCreateCustomTest}
-            className={`flex items-center px-6 py-3 rounded-lg transition-colors shadow-sm hover:shadow-md ${
-              userPlan?.customTestsEnabled === true 
-                ? 'bg-[#91c26a] text-white hover:bg-[#82b35b]' 
-                : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+            onClick={() => navigate('/custom-test-creator')}
+            className={`flex items-center px-6 py-3 rounded-lg transition-all duration-300 ${
+              isCreatingTest 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : userPlan?.customTestsEnabled === true 
+                  ? 'bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white hover:shadow-lg transform hover:-translate-y-0.5' 
+                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
             }`}
-            disabled={!userPlan?.customTestsEnabled}
           >
-            <Plus className="h-5 w-5 mr-2" />
-            <span>Crear Test Personalizado</span>
-            {!userPlan?.customTestsEnabled && (
-              <span className="ml-2 text-xs">(Requiere plan premium)</span>
+            {isCreatingTest ? (
+              <div className="flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                Creando...
+              </div>
+            ) : (
+              <span>Crear Test Personalizado</span>
             )}
+            <Plus className="h-5 w-5 ml-2" />
           </button>
-          
+
           <button
-            onClick={handleStartRandomTest}
-            className="text-[#91c26a] hover:text-[#82b35b] font-medium text-sm"
+            onClick={() => setShowReportModal(true)}
+            className="flex items-center px-6 py-3 rounded-lg transition-all duration-300 bg-white border border-[#91c26a] text-[#91c26a] hover:bg-[#91c26a] hover:text-white hover:shadow-lg transform hover:-translate-y-0.5"
           >
-            Test Aleatorio
+            <AlertCircle className="h-5 w-5 mr-2" />
+            <span>Reportar Problema</span>
           </button>
         </div>
       </div>
 
-      {/* Gráficos de Rendimiento */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        {/* Progreso en el Tiempo */}
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Puntuación Media */}
+        <div className="bg-white rounded-xl shadow-sm p-6 flex items-center">
+          <div className="rounded-full bg-green-100 p-3 mr-4">
+            <Trophy className="w-6 h-6 text-green-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-gray-500">Puntuación Media</h3>
+            <p className="text-2xl font-semibold text-gray-900">{calculateUserStats(userResults).averageScore}%</p>
+          </div>
+        </div>
+
+        {/* Tests Completados */}
+        <div className="bg-white rounded-xl shadow-sm p-6 flex items-center">
+          <div className="rounded-full bg-blue-100 p-3 mr-4">
+            <Brain className="w-6 h-6 text-blue-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-gray-500">Tests Completados</h3>
+            <p className="text-2xl font-semibold text-gray-900">{calculateUserStats(userResults).completedTests}</p>
+          </div>
+        </div>
+
+        {/* Tiempo de Estudio */}
+        <div className="bg-white rounded-xl shadow-sm p-6 flex items-center">
+          <div className="rounded-full bg-purple-100 p-3 mr-4">
+            <Clock className="w-6 h-6 text-purple-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-gray-500">Tiempo de Estudio</h3>
+            <p className="text-2xl font-semibold text-gray-900">{formatStudyTime(calculateUserStats(userResults).totalStudyTime)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Gráficos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Gráfico de Progreso */}
         <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <TrendingUp className="w-5 h-5 mr-2 text-[#91c26a]" />
-            Progreso en el Tiempo
-          </h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+          <h3 className="text-lg font-semibold mb-4">Progreso en el Tiempo</h3>
+          <div style={{ width: '100%', height: 300 }}>
+            <ResponsiveContainer>
               <LineChart data={performanceData.timeProgress}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
-                <Tooltip 
-                  formatter={(value: number, name: string) => {
-                    if (name === "Tiempo (min)") {
-                      const data = performanceData.timeProgress.find(item => item.timeSpent === value);
-                      return data?.timeFormatted || value;
-                    }
-                    return value;
-                  }}
-                />
+                <Tooltip />
                 <Legend />
                 <Line type="monotone" dataKey="score" stroke="#91c26a" name="Puntuación" />
                 <Line type="monotone" dataKey="timeSpent" stroke="#fbbf24" name="Tiempo (min)" />
@@ -573,74 +632,29 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Rendimiento por Bloque */}
-        <BlockPerformanceChart data={performanceData.blockPerformance} />
-
-        {/* Distribución de Resultados */}
-        <div className="bg-white rounded-xl shadow-sm p-6 lg:col-span-2">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Trophy className="w-5 h-5 mr-2 text-[#91c26a]" />
-            Distribución de Resultados
-          </h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+        {/* Gráfico de Distribución por Categorías */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold mb-4">Distribución por Categorías</h3>
+          <div style={{ width: '100%', height: 300 }}>
+            <ResponsiveContainer>
               <PieChart>
                 <Pie
                   data={performanceData.categoryDistribution}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {performanceData.categoryDistribution.map((entry: any, index: number) => (
+                  {performanceData.categoryDistribution.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center">
-            <div className="bg-[#91c26a] bg-opacity-10 p-3 rounded-full">
-              <Trophy className="h-6 w-6 text-[#91c26a]" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Puntuación Media</p>
-              <p className="text-2xl font-semibold text-gray-900">85%</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center">
-            <div className="bg-[#91c26a] bg-opacity-10 p-3 rounded-full">
-              <Brain className="h-6 w-6 text-[#91c26a]" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Tests Completados</p>
-              <p className="text-2xl font-semibold text-gray-900">12</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center">
-            <div className="bg-[#91c26a] bg-opacity-10 p-3 rounded-full">
-              <Clock className="h-6 w-6 text-[#91c26a]" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Tiempo de Estudio</p>
-              <p className="text-2xl font-semibold text-gray-900">8h 30m</p>
-            </div>
           </div>
         </div>
       </div>
@@ -662,7 +676,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h4 className="text-xl font-bold text-gray-900">{userPlan.name}</h4>
-                <p className="text-gray-600 mt-1">
+                <p className="text-xs text-[#91c26a]">
                   {daysLeft} días restantes
                 </p>
               </div>
@@ -692,23 +706,6 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
         )}
-      </div>
-
-      {/* Recent Tests Section */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900">Tests Recientes</h3>
-          <button
-            onClick={() => navigate('/tests')}
-            className="text-sm text-[#91c26a] hover:text-[#82b35b] font-medium"
-          >
-            Ver todos
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Test cards would go here */}
-        </div>
       </div>
 
       {/* Tests Disponibles */}
@@ -865,17 +862,81 @@ const Dashboard: React.FC = () => {
             <div className="mt-6 flex justify-end space-x-4">
               <button
                 onClick={() => setShowCustomizeModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
               >
                 Cancelar
               </button>
               <button
-                onClick={handleCreateCustomTestSubmit}
+                onClick={handleCreateCustomTest}
                 className="px-4 py-2 bg-[#91c26a] text-white rounded-md hover:bg-[#82b35b]"
               >
                 Crear Test
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Reporte */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+              <AlertCircle className="h-5 w-5 mr-2 text-[#91c26a]" />
+              Reportar Problema
+            </h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmitReport(reportData);
+            }} className="space-y-4">
+              <div>
+                <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Problema
+                </label>
+                <select
+                  id="type"
+                  value={reportData.type}
+                  onChange={(e) => setReportData(prev => ({ ...prev, type: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#91c26a]/50 focus:border-[#91c26a]"
+                  required
+                >
+                  <option value="">Selecciona un tipo</option>
+                  <option value="bug">Error en la aplicación</option>
+                  <option value="content">Problema con el contenido</option>
+                  <option value="suggestion">Sugerencia de mejora</option>
+                  <option value="other">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                  Descripción
+                </label>
+                <textarea
+                  id="description"
+                  value={reportData.description}
+                  onChange={(e) => setReportData(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#91c26a]/50 focus:border-[#91c26a] h-32"
+                  placeholder="Describe el problema en detalle..."
+                  required
+                />
+              </div>
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowReportModal(false)}
+                  className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 rounded-lg bg-[#91c26a] text-white hover:bg-[#82b35b] transition-colors"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Enviando...' : 'Enviar Reporte'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

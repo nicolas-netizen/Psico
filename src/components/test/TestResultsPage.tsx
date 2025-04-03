@@ -3,33 +3,46 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle, XCircle, BarChart2 } from 'lucide-react';
 
 interface TestResult {
+  id: string;
   score: number;
-  totalQuestions: number;
-  correctAnswers: number;
-  incorrectAnswers: number;
-  categoryPerformance: {
-    [key: string]: {
-      correct: number;
-      total: number;
-    };
-  };
+  answers: Array<{
+    questionId: string;
+    isCorrect: boolean;
+    blockName: string;
+  }>;
+  blocks: Array<{
+    type: string;
+    correct: number;
+    total: number;
+  }>;
+}
+
+interface Test {
+  id: string;
+  title: string;
+  questions: Array<{
+    id: string;
+    text: string;
+    blockType: string;
+  }>;
 }
 
 const TestResultsPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const result = location.state?.result as TestResult;
+  const result = location.state?.testResult as TestResult;
+  const test = location.state?.test as Test;
 
-  if (!result) {
+  if (!result || !test) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600">No se encontraron resultados</p>
           <button
-            onClick={() => navigate('/tests')}
+            onClick={() => navigate('/dashboard')}
             className="mt-4 px-4 py-2 bg-[#91c26a] text-white rounded hover:bg-[#6ea844]"
           >
-            Volver a Tests
+            Volver al Dashboard
           </button>
         </div>
       </div>
@@ -42,7 +55,7 @@ const TestResultsPage: React.FC = () => {
         <div className="bg-white shadow rounded-lg p-6">
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Resultados del Test</h1>
+            <h1 className="text-3xl font-bold text-gray-900">{test.title}</h1>
             <div className="mt-4">
               <div className="text-5xl font-bold text-[#91c26a]">{result.score}%</div>
               <p className="mt-2 text-gray-600">Puntuación Final</p>
@@ -52,46 +65,50 @@ const TestResultsPage: React.FC = () => {
           {/* Stats Grid */}
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 mb-8">
             <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-gray-900">{result.totalQuestions}</div>
+              <div className="text-2xl font-bold text-gray-900">{test.questions.length}</div>
               <p className="text-sm text-gray-600">Total Preguntas</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="flex items-center justify-center">
                 <CheckCircle className="h-5 w-5 text-green-500 mr-1" />
-                <span className="text-2xl font-bold text-gray-900">{result.correctAnswers}</span>
+                <span className="text-2xl font-bold text-gray-900">
+                  {result.answers?.filter(a => a.isCorrect).length || 0}
+                </span>
               </div>
               <p className="text-sm text-gray-600">Correctas</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <div className="flex items-center justify-center">
                 <XCircle className="h-5 w-5 text-red-500 mr-1" />
-                <span className="text-2xl font-bold text-gray-900">{result.incorrectAnswers}</span>
+                <span className="text-2xl font-bold text-gray-900">
+                  {result.answers?.filter(a => !a.isCorrect).length || 0}
+                </span>
               </div>
               <p className="text-sm text-gray-600">Incorrectas</p>
             </div>
           </div>
 
-          {/* Category Performance */}
+          {/* Block Performance */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
               <BarChart2 className="h-5 w-5 mr-2" />
-              Rendimiento por Categoría
+              Rendimiento por Bloque
             </h2>
             <div className="space-y-4">
-              {Object.entries(result.categoryPerformance).map(([category, performance]) => (
-                <div key={category}>
+              {result.blocks?.map((block, index) => (
+                <div key={index}>
                   <div className="flex justify-between text-sm text-gray-600 mb-1">
-                    <span>{category}</span>
+                    <span>{block.type}</span>
                     <span>
-                      {performance.correct} de {performance.total} (
-                      {Math.round((performance.correct / performance.total) * 100)}%)
+                      {block.correct} de {block.total} (
+                      {Math.round((block.correct / block.total) * 100)}%)
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-[#91c26a] h-2 rounded-full"
                       style={{
-                        width: `${(performance.correct / performance.total) * 100}%`,
+                        width: `${(block.correct / block.total) * 100}%`,
                       }}
                     ></div>
                   </div>
@@ -100,19 +117,13 @@ const TestResultsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Action Buttons */}
           <div className="flex justify-center space-x-4">
             <button
-              onClick={() => navigate('/tests')}
-              className="px-6 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#6ea844] transition-colors"
-            >
-              Volver a Tests
-            </button>
-            <button
               onClick={() => navigate('/dashboard')}
-              className="px-6 py-2 border border-[#91c26a] text-[#91c26a] rounded-lg hover:bg-[#f3f9ee] transition-colors"
+              className="px-6 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
             >
-              Ir al Dashboard
+              Volver al Dashboard
             </button>
           </div>
         </div>

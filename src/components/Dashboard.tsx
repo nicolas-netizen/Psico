@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc, setDoc, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -460,6 +460,27 @@ const Dashboard: React.FC = () => {
   };
 
   const handleSubmitReport = async (reportData: ReportData) => {
+    if (!currentUser?.uid) {
+      toast.error('Debes iniciar sesión para enviar reportes');
+      return;
+    }
+
+    // Verificar que el usuario existe en la base de datos
+    try {
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (!userDoc.exists()) {
+        // Si el usuario no existe en la base de datos, lo creamos
+        await setDoc(doc(db, 'users', currentUser.uid), {
+          email: currentUser.email,
+          role: 'user',
+          createdAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      console.error('Error verificando usuario:', error);
+      toast.error('Error al verificar tu cuenta. Por favor, intenta más tarde.');
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -476,12 +497,7 @@ const Dashboard: React.FC = () => {
       const newReport = {
         userId: currentUser.uid,
         type: reportData.type.trim(),
-        description: reportData.description.trim(),
-        status: 'pending',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        email: currentUser.email || 'No disponible',
-        userName: currentUser.displayName || 'Usuario sin nombre'
+        description: reportData.description.trim()
       };
 
       const reportsRef = collection(db, 'reports');

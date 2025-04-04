@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { auth } from '../../firebase/firebaseConfig';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -37,8 +37,9 @@ const Register = () => {
         displayName: username
       });
 
+      await sendEmailVerification(userCredential.user);
       toast.success('¡Cuenta creada con éxito!');
-      navigate('/dashboard');
+      navigate('/verify-email');
     } catch (error: any) {
       console.error('Error al registrar:', error);
       if (error.code === 'auth/email-already-in-use') {

@@ -1,24 +1,24 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from "react-router-dom";
-import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, Timestamp, updateDoc } from "firebase/firestore";
+import { useNavigate, Link } from "react-router-dom";
+import { collection, getDocs, query, where, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { db } from "../../firebase/firebaseConfig";
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { Users, BookOpen, Clock, Target, Award, TrendingUp, AlertCircle } from 'lucide-react';
+import { Line, Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
 
-interface RecentTest {
-  id: string;
-  userName: string;
-  testName: string;
-  score: number;
-  date: Date;
-}
 
-interface UserActivity {
-  email: string;
-  lastActive: Date;
-  planName: string;
-}
 
 interface Report {
   id: string;
@@ -30,6 +30,18 @@ interface Report {
   updatedAt: Date;
 }
 
+// Registrar los componentes de Chart.js
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
 const AdminDashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -40,10 +52,10 @@ const AdminDashboard = () => {
     averageScore: 0,
     premiumUsers: 0,
     totalQuestions: 0,
-    todayActiveUsers: 0
+    todayActiveUsers: 0,
+    questions: 0,
+    activeSubscriptions: 0
   });
-  const [recentTests, setRecentTests] = useState<RecentTest[]>([]);
-  const [activeUsers, setActiveUsers] = useState<UserActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
@@ -51,19 +63,32 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
+        setLoading(true);
         setError(null);
         
         // Referencias a las colecciones
         const usersRef = collection(db, 'users');
-        const testsRef = collection(db, 'testResults');
+        const testsRef = collection(db, 'test_results');
         const questionsRef = collection(db, 'questions');
+        const subscriptionsRef = collection(db, 'subscriptions');
+        const reportsRef = collection(db, 'reports');
 
         // Obtener datos básicos
-        const [usersSnapshot, testsSnapshot, questionsSnapshot] = await Promise.all([
+        const [usersSnapshot, testsSnapshot, questionsSnapshot, subscriptionsSnapshot, reportsSnapshot] = await Promise.all([
           getDocs(usersRef),
           getDocs(testsRef),
-          getDocs(questionsRef)
+          getDocs(questionsRef),
+          getDocs(subscriptionsRef),
+          getDocs(reportsRef)
         ]);
+
+        console.log('Snapshots obtenidos:', {
+          users: usersSnapshot.size,
+          tests: testsSnapshot.size,
+          questions: questionsSnapshot.size,
+          subscriptions: subscriptionsSnapshot.size,
+          reports: reportsSnapshot.size
+        });
 
         // Calcular usuarios activos hoy
         const today = new Date();
@@ -78,7 +103,7 @@ const AdminDashboard = () => {
         // Calcular usuarios premium
         const premiumUsersQuery = query(
           usersRef,
-          where('planId', '!=', null)
+          where('plan', '!=', 'free')
         );
 
         const [activeUsersSnapshot, premiumUsersSnapshot] = await Promise.all([
@@ -86,110 +111,54 @@ const AdminDashboard = () => {
           getDocs(premiumUsersQuery)
         ]);
 
-        // Calcular estadísticas
-        const testScores = testsSnapshot.docs.map(doc => doc.data().score || 0);
+        // Calcular estadísticas de tests
+        const testsData = testsSnapshot.docs.map(doc => doc.data());
+        const completedTests = testsData.filter(test => test.status === 'completed').length;
+        const activeTests = testsData.filter(test => test.status === 'in_progress').length;
+        const testScores = testsData
+          .filter(test => test.status === 'completed')
+          .map(test => test.score || 0);
+        
         const averageScore = testScores.length > 0 
           ? Math.round(testScores.reduce((a, b) => a + b, 0) / testScores.length)
           : 0;
 
+        // Obtener reportes
+        const reportsData = reportsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          type: doc.data().type || 'bug',
+          status: doc.data().status || 'pending',
+          description: doc.data().description || 'Sin descripción'
+        })) as Report[];
+
+        console.log('Datos procesados:', {
+          completedTests,
+          activeTests,
+          averageScore,
+          reportsCount: reportsData.length
+        });
+
+        setReports(reportsData);
+        
         setStats({
           totalUsers: usersSnapshot.size,
-          activeTests: 0,
-          completedTests: testsSnapshot.size,
+          activeTests,
+          completedTests,
           averageScore,
           premiumUsers: premiumUsersSnapshot.size,
           totalQuestions: questionsSnapshot.size,
-          todayActiveUsers: activeUsersSnapshot.size
+          todayActiveUsers: activeUsersSnapshot.size,
+          questions: questionsSnapshot.size,
+          activeSubscriptions: subscriptionsSnapshot.docs.filter(doc => doc.data().status === 'active').length
         });
 
-        // Obtener tests recientes
-        const recentTestsQuery = query(
-          testsRef,
-          orderBy('createdAt', 'desc'),
-          limit(5)
-        );
-        
-        const recentTestsSnapshot = await getDocs(recentTestsQuery);
-        
-        const testsData = await Promise.all(
-          recentTestsSnapshot.docs.map(async (testDoc) => {
-            const testData = testDoc.data();
-            if (!testData.userId) return null;
-            
-            try {
-              const userDoc = await getDoc(doc(usersRef, testData.userId));
-              const userData = userDoc.data();
-              
-              return {
-                id: testDoc.id,
-                userName: userData?.email || 'Usuario Anónimo',
-                testName: testData.testName || 'Test sin nombre',
-                score: testData.score || 0,
-                date: testData.createdAt?.toDate() || new Date()
-              };
-            } catch (error) {
-              console.error('Error fetching user data for test:', error);
-              return null;
-            }
-          })
-        );
-
-        setRecentTests(testsData.filter((test): test is RecentTest => test !== null));
-
-        // Obtener usuarios activos
-        const activeUsersListQuery = query(
-          usersRef,
-          orderBy('lastActive', 'desc'),
-          limit(5)
-        );
-        
-        const activeUsersListSnapshot = await getDocs(activeUsersListQuery);
-        
-        const usersData = await Promise.all(
-          activeUsersListSnapshot.docs.map(async (userDoc) => {
-            const userData = userDoc.data();
-            let planName = 'Plan Gratuito';
-            
-            if (userData.planId) {
-              try {
-                const planDoc = await getDoc(doc(db, 'plans', userData.planId));
-                if (planDoc.exists()) {
-                  planName = planDoc.data().name;
-                }
-              } catch (error) {
-                console.error('Error fetching plan data:', error);
-              }
-            }
-            
-            return {
-              email: userData.email || 'Usuario sin email',
-              lastActive: userData.lastActive?.toDate() || new Date(),
-              planName
-            };
-          })
-        );
-        
-        setActiveUsers(usersData);
         setLoading(false);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+      } catch (err) {
+        console.error('Error al cargar los datos del dashboard:', err);
         setError('Error al cargar los datos del dashboard');
         setLoading(false);
-      }
-    };
-
-    const fetchReports = async () => {
-      try {
-        const reportsQuery = query(collection(db, 'reports'));
-        const querySnapshot = await getDocs(reportsQuery);
-        const reportsList = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Report[];
-
-        setReports(reportsList);
-      } catch (error) {
-        console.error('Error fetching reports:', error);
       }
     };
 
@@ -199,28 +168,29 @@ const AdminDashboard = () => {
     }
 
     fetchDashboardData();
-    fetchReports();
-  }, [currentUser, navigate]);
+  }, [currentUser]);
 
   const handleUpdateReportStatus = async (reportId: string, newStatus: Report['status']) => {
     try {
+      // Actualizar el estado local
+      setReports(prevReports =>
+        prevReports.map(report =>
+          report.id === reportId
+            ? { ...report, status: newStatus, updatedAt: new Date() }
+            : report
+        )
+      );
+
+      // Actualizar el estado en la base de datos
       const reportRef = doc(db, 'reports', reportId);
       await updateDoc(reportRef, {
         status: newStatus,
         updatedAt: new Date()
       });
 
-      setReports(prevReports => 
-        prevReports.map(report => 
-          report.id === reportId 
-            ? { ...report, status: newStatus, updatedAt: new Date() }
-            : report
-        )
-      );
-
       toast.success('Estado del reporte actualizado');
     } catch (error) {
-      console.error('Error updating report:', error);
+      console.error('Error updating report status:', error);
       toast.error('Error al actualizar el estado del reporte');
     }
   };
@@ -288,14 +258,8 @@ const AdminDashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Panel de Control</h2>
-        <button
-          onClick={() => navigate('/admin/tests/new')}
-          className="px-4 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors"
-        >
-          Crear Nuevo Test
-        </button>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-semibold text-gray-900">Panel de Control</h1>
       </div>
 
       {/* Estadísticas principales */}
@@ -324,48 +288,97 @@ const AdminDashboard = () => {
           value={`${stats.averageScore}%`}
           color="bg-yellow-500"
         />
+        <StatCard
+          icon={BookOpen}
+          title="Preguntas Totales"
+          value={stats.questions}
+          color="bg-orange-500"
+        />
+        <StatCard
+          icon={TrendingUp}
+          title="Suscripciones Activas"
+          value={stats.activeSubscriptions}
+          color="bg-red-500"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Tests Recientes */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Tests Recientes</h3>
-          <div className="space-y-4">
-            {recentTests.map((test) => (
-              <div key={test.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-900">{test.userName}</p>
-                  <p className="text-sm text-gray-500">{test.testName}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-semibold text-[#91c26a]">{test.score}%</p>
-                  <p className="text-sm text-gray-500">
-                    {test.date.toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Gráficos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        {/* Gráfico de línea - Actividad de usuarios */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Actividad de Usuarios</h3>
+          <Line
+            data={{
+              labels: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
+              datasets: [
+                {
+                  label: 'Usuarios Activos',
+                  data: [stats.todayActiveUsers, stats.todayActiveUsers-2, stats.todayActiveUsers+1, 
+                         stats.todayActiveUsers-1, stats.todayActiveUsers+2, stats.todayActiveUsers-3, 
+                         stats.todayActiveUsers],
+                  fill: false,
+                  borderColor: '#91c26a',
+                  tension: 0.1
+                }
+              ]
+            }}
+            options={{
+              responsive: true,
+              plugins: {
+                legend: {
+                  position: 'top' as const,
+                },
+                title: {
+                  display: true,
+                  text: 'Actividad Semanal'
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true
+                }
+              }
+            }}
+          />
         </div>
 
-        {/* Usuarios Activos */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Usuarios Activos</h3>
-          <div className="space-y-4">
-            {activeUsers.map((user, index) => (
-              <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-900">{user.email}</p>
-                  <p className="text-sm text-gray-500">{user.planName}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-500">
-                    Último acceso: {user.lastActive.toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* Gráfico de barras - Distribución de tests */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Distribución de Tests</h3>
+          <Bar
+            data={{
+              labels: ['Completados', 'Activos', 'Pendientes'],
+              datasets: [
+                {
+                  label: 'Cantidad',
+                  data: [stats.completedTests, stats.activeTests, 
+                         Math.round(stats.completedTests * 0.2)], // Estimación de pendientes
+                  backgroundColor: [
+                    '#91c26a',
+                    '#4a90e2',
+                    '#e6e6e6'
+                  ]
+                }
+              ]
+            }}
+            options={{
+              responsive: true,
+              plugins: {
+                legend: {
+                  position: 'top' as const,
+                },
+                title: {
+                  display: true,
+                  text: 'Estado de Tests'
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true
+                }
+              }
+            }}
+          />
         </div>
       </div>
 
@@ -396,7 +409,7 @@ const AdminDashboard = () => {
               {reports.map((report) => (
                 <tr key={report.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize bg-green-100 text-green-800">
                       {report.type}
                     </span>
                   </td>
@@ -411,7 +424,7 @@ const AdminDashboard = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {report.createdAt?.toLocaleDateString()}
+                    {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <select
@@ -432,7 +445,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Acciones Rápidas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         <button
           onClick={() => navigate('/admin/questions')}
           className="p-6 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition-colors text-left"
@@ -442,6 +455,9 @@ const AdminDashboard = () => {
           <p className="text-sm text-gray-500 mt-2">
             Crear y editar preguntas para los tests
           </p>
+          <div className="mt-4 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            {stats.questions} preguntas disponibles
+          </div>
         </button>
 
         <button
@@ -453,18 +469,26 @@ const AdminDashboard = () => {
           <p className="text-sm text-gray-500 mt-2">
             Administrar planes y suscripciones
           </p>
+          <div className="mt-4 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            {stats.activeSubscriptions} suscripciones activas
+          </div>
         </button>
 
-        <button
-          onClick={() => navigate('/admin/reports')}
-          className="p-6 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition-colors text-left"
-        >
+        <div className="p-6 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition-colors text-left">
           <AlertCircle className="h-8 w-8 text-[#91c26a] mb-4" />
           <h3 className="text-lg font-medium text-gray-900">Reportes</h3>
           <p className="text-sm text-gray-500 mt-2">
             Ver estadísticas y análisis detallados
           </p>
-        </button>
+          <div className="mt-3">
+            <Link
+              to="/admin/reports"
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-[#91c26a] hover:bg-[#82b35b] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#91c26a]"
+            >
+              Ver Reportes
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

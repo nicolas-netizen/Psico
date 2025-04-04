@@ -1,9 +1,19 @@
-import React from 'react';
+import { lazy, Suspense } from 'react';
+import { Link } from 'react-router-dom';
 import Hero from '../components/Hero';
-import Stats from '../components/Stats';
-import Features from '../components/Features';
-import Testimonials from '../components/Testimonials';
-import PlanList from '../components/plans/PlanList';
+
+// Lazy load de componentes secundarios
+const Stats = lazy(() => import('../components/Stats'));
+const Features = lazy(() => import('../components/Features'));
+const Testimonials = lazy(() => import('../components/Testimonials'));
+const PlanList = lazy(() => import('../components/plans/PlanList'));
+
+// Componente de carga
+const LoadingComponent = () => (
+  <div className="flex justify-center items-center py-12">
+    <div className="w-8 h-8 border-4 border-[#91c26a] border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
 
 const Home = () => {
   return (
@@ -11,18 +21,24 @@ const Home = () => {
       <Hero />
       
       {/* Sección de Estadísticas con fondo suave */}
-      <div className="bg-gradient-to-r from-[#f0f7eb] to-[#e8f5e3]">
-        <Stats />
+      <div className="bg-[#f0f7eb]">
+        <Suspense fallback={<LoadingComponent />}>
+          <Stats />
+        </Suspense>
       </div>
       
       {/* Características con fondo blanco */}
       <div className="bg-white py-16">
-        <Features />
+        <Suspense fallback={<LoadingComponent />}>
+          <Features />
+        </Suspense>
       </div>
       
       {/* Testimonios con fondo suave */}
-      <div className="bg-gradient-to-br from-[#f5f7fa] to-[#f0f7eb] py-16">
-        <Testimonials />
+      <div className="bg-[#f5f7fa] py-16">
+        <Suspense fallback={<LoadingComponent />}>
+          <Testimonials />
+        </Suspense>
       </div>
       
       {/* Sección de Planes Destacados */}
@@ -38,18 +54,20 @@ const Home = () => {
             </p>
           </div>
           
-          <PlanList hideActions={true} />
+          <Suspense fallback={<LoadingComponent />}>
+            <PlanList hideActions={true} />
+          </Suspense>
           
           <div className="text-center mt-12">
             <p className="text-gray-600 mb-6">
               ¿Quieres ver todos nuestros planes y sus beneficios completos?
             </p>
-            <a 
-              href="/plans" 
+            <Link 
+              to="/plans" 
               className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-[#91c26a] hover:bg-[#7ea756] transition-colors duration-300"
             >
               Ver Todos los Planes
-            </a>
+            </Link>
           </div>
         </div>
       </section>

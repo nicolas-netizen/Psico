@@ -27,11 +27,14 @@ import CustomTestCreator from './components/CustomTestCreator';
 import SolveTest from './components/SolveTest';
 import PlansPage from './pages/PlansPage';
 import TestReview from './components/TestReview';
+import EmailVerification from './pages/EmailVerification';
+import AdminReports from './pages/AdminReports';
 
 // Rutas protegidas
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { currentUser } = useAuth();
-  return currentUser ? <>{children}</> : <Navigate to="/login" />;
+  const location = useLocation();
+  return currentUser ? <>{children}</> : <Navigate to="/login" state={{ from: location }} replace />;
 };
 
 // Componente para manejar el layout
@@ -87,11 +90,12 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            <Route path="/" element={<Layout><PrivateRoute><Home /></PrivateRoute></Layout>} />
+            <Route path="/" element={<Layout><Home /></Layout>} />
             <Route path="/login" element={<Layout><Login /></Layout>} />
             <Route path="/register" element={<Layout><Register /></Layout>} />
-            <Route path="/reset-password" element={<Layout><ResetPassword /></Layout>} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/reset-password-action" element={<ResetPasswordAction />} />
+            <Route path="/verify-email" element={<EmailVerification />} />
             {/* Ruta para la acción de Firebase Auth */}
             <Route path="/__/auth/action" element={<ResetPasswordAction />} />
             <Route 
@@ -130,6 +134,16 @@ function App() {
                     <BaremoCalculatorPage />
                   </Layout>
                 </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/reports"
+              element={
+                <AdminRoute>
+                  <Layout>
+                    <AdminReports />
+                  </Layout>
+                </AdminRoute>
               }
             />
             <Route 

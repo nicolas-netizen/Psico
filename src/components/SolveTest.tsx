@@ -55,7 +55,7 @@ const SolveTest = () => {
   const [memoryTimer, setMemoryTimer] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [isTestFinished, setIsTestFinished] = useState(false);
-  const [testResult, setTestResult] = useState<{score: number, answers: any[], recommendation: string}>(); 
+  const [testResult, setTestResult] = useState<{score: number, answers: any[], recommendations: { blockName: string, tips: string[], exercises: string[], resources: string[] }[]}>(); 
   const currentQuestion = test?.questions[currentQuestionIndex];
 
   useEffect(() => {
@@ -190,6 +190,107 @@ const SolveTest = () => {
     }
   };
 
+  const getBlockRecommendation = (blockName: string, percentage: number, timeSpent: number) => {
+    const recommendations: { [key: string]: { tips: string[], exercises: string[], resources: string[] } } = {
+      'Sinónimos': {
+        tips: [
+          'Practica la lectura activa subrayando sinónimos',
+          'Crea tarjetas de estudio con palabras y sus sinónimos',
+          'Utiliza un diccionario de sinónimos regularmente'
+        ],
+        exercises: [
+          'Ejercicios de completar oraciones con sinónimos',
+          'Juegos de emparejamiento de palabras',
+          'Redacción usando sinónimos específicos'
+        ],
+        resources: [
+          'Diccionario de la RAE',
+          'Wordreference - Sección de sinónimos',
+          'Ejercicios de vocabulario en línea'
+        ]
+      },
+      'Antónimos': {
+        tips: [
+          'Estudia palabras junto con sus opuestos',
+          'Practica identificando antónimos en textos',
+          'Crea listas de pares de antónimos'
+        ],
+        exercises: [
+          'Ejercicios de opuestos en contexto',
+          'Juegos de palabras contrarias',
+          'Redacción usando antónimos'
+        ],
+        resources: [
+          'Diccionario de antónimos online',
+          'Aplicaciones de práctica de vocabulario',
+          'Recursos educativos de lenguaje'
+        ]
+      },
+      'Memoria': {
+        tips: [
+          'Practica técnicas de memorización visual',
+          'Utiliza asociaciones mentales',
+          'Realiza ejercicios de memoria regularmente'
+        ],
+        exercises: [
+          'Juegos de memoria con cartas',
+          'Ejercicios de secuencias',
+          'Práctica de patrones visuales'
+        ],
+        resources: [
+          'Aplicaciones de entrenamiento cerebral',
+          'Juegos de memoria online',
+          'Recursos de desarrollo cognitivo'
+        ]
+      }
+    };
+
+    // Obtener recomendaciones base del bloque o usar recomendaciones genéricas
+    const baseRecommendation = recommendations[blockName] || {
+      tips: [
+        'Revisa el material de estudio relacionado',
+        'Practica con ejercicios similares',
+        'Toma notas durante el aprendizaje'
+      ],
+      exercises: [
+        'Realiza ejercicios prácticos',
+        'Participa en actividades de grupo',
+        'Crea tus propios ejercicios'
+      ],
+      resources: [
+        'Materiales de estudio online',
+        'Videos educativos',
+        'Recursos de práctica'
+      ]
+    };
+
+    // Personalizar recomendaciones según el rendimiento
+    let finalTips = [...baseRecommendation.tips];
+    let finalExercises = [...baseRecommendation.exercises];
+    let finalResources = [...baseRecommendation.resources];
+
+    if (percentage < 50) {
+      finalTips.unshift('Dedica más tiempo a estudiar los conceptos básicos');
+      finalExercises.unshift('Comienza con ejercicios más simples');
+    } else if (percentage < 70) {
+      finalTips.unshift('Enfocáte en las áreas donde tuviste dificultades');
+    } else if (percentage >= 90) {
+      finalTips.unshift('¡Excelente trabajo! Considera ayudar a otros estudiantes');
+      finalExercises.unshift('Intenta ejercicios más desafiantes');
+    }
+
+    // Ajustar recomendaciones según el tiempo empleado
+    if (timeSpent > 300) { // más de 5 minutos
+      finalTips.push('Intenta mejorar tu velocidad de respuesta');
+    }
+
+    return {
+      tips: finalTips,
+      exercises: finalExercises,
+      resources: finalResources
+    };
+  };
+
   const calculateScore = () => {
     if (!test) return 0;
     
@@ -247,19 +348,28 @@ const SolveTest = () => {
         questionsAnswered: test.questions.length
       });
 
-      // Generar recomendación basada en el puntaje
-      let recommendation = '';
-      if (score >= 90) {
-        recommendation = '¡Excelente trabajo! Has demostrado un dominio sobresaliente. Sigue así y considera tomar tests más desafiantes.';
-      } else if (score >= 70) {
-        recommendation = 'Buen trabajo. Tienes un buen dominio del tema, pero hay espacio para mejorar en algunos aspectos específicos.';
-      } else if (score >= 50) {
-        recommendation = 'Has alcanzado un nivel básico. Te recomendamos repasar los temas en los que tuviste dificultades y volver a intentar el test.';
-      } else {
-        recommendation = 'Parece que algunos conceptos necesitan más atención. Te sugerimos revisar el material de estudio y practicar más antes de volver a intentar el test.';
-      }
+      // Agrupar respuestas por bloque y calcular porcentajes
+      const blockResults = answers.reduce((acc: { [key: string]: { correct: number, total: number } }, answer) => {
+        if (!acc[answer.blockName]) {
+          acc[answer.blockName] = { correct: 0, total: 0 };
+        }
+        acc[answer.blockName].total++;
+        if (answer.isCorrect) acc[answer.blockName].correct++;
+        return acc;
+      }, {});
 
-      setTestResult({ score, answers, recommendation });
+      // Generar recomendaciones por bloque
+      const recommendations = Object.entries(blockResults).map(([blockName, results]) => {
+        const percentage = (results.correct / results.total) * 100;
+        const timeSpent = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+        const blockRecommendation = getBlockRecommendation(blockName, percentage, timeSpent);
+        return {
+          blockName,
+          ...blockRecommendation
+        };
+      });
+
+      setTestResult({ score, answers, recommendations });
       setIsTestFinished(true);
       toast.success('Test completado con éxito');
     } catch (error) {
@@ -452,45 +562,91 @@ const SolveTest = () => {
   }
 
   return (
-    <div className="fixed inset-0 top-16 bg-gradient-to-br from-blue-50 via-white to-green-50">
-      <div className="min-h-full w-full flex items-center justify-center p-3">
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg w-full max-w-2xl border border-gray-100">
-          <div className="p-5">
+    <div className="fixed inset-0 top-16 bg-gray-50 overflow-y-auto">
+      <div className="min-h-full w-full flex justify-center py-6 px-3">
+        <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl border border-gray-200 my-auto">
+          <div className="p-6 md:p-8">
             {isTestFinished && testResult ? (
               <div className="space-y-6">
-                <div className="text-center">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Resultados del Test</h2>
-                  <div className="inline-flex items-center justify-center bg-gradient-to-r from-[#91c26a]/20 to-[#91c26a]/10 px-6 py-3 rounded-lg">
+                <div className="text-center mb-8">
+                  <h2 className="text-3xl font-bold text-gray-800 mb-4">Resultados del Test</h2>
+                  <div className="bg-[#91c26a]/10 px-8 py-6 rounded-xl border border-[#91c26a]/20 mb-4">
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-800">
+                      <div className="text-5xl font-bold text-[#91c26a] mb-2">
                         {testResult.score.toFixed(1)}%
                       </div>
-                      <div className="text-sm text-[#91c26a] font-medium">Puntuación</div>
+                      <div className="text-sm text-[#91c26a] font-medium uppercase tracking-wide">Puntuación</div>
                     </div>
                   </div>
+
                 </div>
 
-                {/* Recomendación */}
-                <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Recomendación:</h3>
-                  <p className="text-gray-600">{testResult.recommendation}</p>
+                {/* Recomendaciones por bloque */}
+                <div className="space-y-8">
+                  <h3 className="text-2xl font-bold text-gray-800 mb-6">Recomendaciones por Bloque</h3>
+                  {testResult.recommendations.map((rec, index) => (
+                    <div key={index} className="bg-gray-50 border border-gray-200 p-6 rounded-lg space-y-5">
+                      <h4 className="text-lg font-semibold text-gray-700">{rec.blockName}</h4>
+                      
+                      {rec.tips.length > 0 && (
+                        <div>
+                          <h5 className="font-medium text-gray-700 mb-2">Consejos:</h5>
+                          <ul className="list-disc list-inside text-gray-600 space-y-1">
+                            {rec.tips.map((tip, i) => (
+                              <li key={i}>{tip}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {rec.exercises.length > 0 && (
+                        <div>
+                          <h5 className="font-medium text-gray-700 mb-2">Ejercicios Recomendados:</h5>
+                          <ul className="list-disc list-inside text-gray-600 space-y-1">
+                            {rec.exercises.map((exercise, i) => (
+                              <li key={i}>{exercise}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {rec.resources.length > 0 && (
+                        <div>
+                          <h5 className="font-medium text-gray-700 mb-2">Recursos:</h5>
+                          <ul className="list-disc list-inside text-gray-600 space-y-1">
+                            {rec.resources.map((resource, i) => (
+                              <li key={i}>{resource}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-700">Detalle de respuestas:</h3>
+                <div className="space-y-4 mt-8">
+                  <h3 className="text-xl font-semibold text-gray-800">Detalle de respuestas:</h3>
                   {testResult.answers.map((answer, index) => (
-                    <div key={index} className={`p-4 rounded-lg ${answer.isCorrect ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'}`}>
+                    <div 
+                      id={`block-${index}`}
+                      key={index} 
+                      className={`p-4 rounded-lg ${
+                        answer.isCorrect 
+                          ? 'bg-[#91c26a]/10 border border-[#91c26a]/20' 
+                          : 'bg-gray-50 border border-gray-200'
+                      }`}
+                    >
                       <p className="font-medium text-gray-800 mb-2">{answer.question}</p>
                       <div className="flex items-center gap-2 text-sm">
-                        <span className={answer.isCorrect ? 'text-green-600' : 'text-red-600'}>
-                          {answer.isCorrect ? '✓ Correcto' : '✗ Incorrecto'}
+                        <span className={answer.isCorrect ? 'text-[#91c26a]' : 'text-gray-600'}>
+                          {answer.isCorrect ? 'Correcto' : 'Incorrecto'}
                         </span>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex justify-center gap-4 mt-6">
+                <div className="flex justify-center gap-4 mt-8">
                   {testResult.score < 70 && (
                     <button
                       onClick={() => {
@@ -498,16 +654,16 @@ const SolveTest = () => {
                         setCurrentQuestionIndex(0);
                         setSelectedAnswers([]);
                       }}
-                      className="px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-colors"
-                    >
-                      Intentar de Nuevo
+                      className="px-6 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors">
+                      <span>Intentar de Nuevo</span>
                     </button>
                   )}
                   <button
                     onClick={() => navigate('/dashboard')}
-                    className="px-6 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg hover:from-[#82b35b] hover:to-[#73a44c] transition-colors"
+                    className="group relative px-6 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg transition-all duration-300 hover:shadow-lg hover:scale-105 overflow-hidden"
                   >
-                    Volver al Dashboard
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#82b35b] to-[#73a44c] transition-transform duration-300 transform translate-x-full group-hover:translate-x-0"></div>
+                    <span className="relative z-10">Volver al Dashboard</span>
                   </button>
                 </div>
               </div>
@@ -562,9 +718,10 @@ const SolveTest = () => {
                   ) : !showingMemoryImages && (
                     <button
                       onClick={nextQuestion}
-                      className="px-4 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg hover:from-[#82b35b] hover:to-[#73a44c] transition-colors"
-                    >
-                      Siguiente
+                      className="px-6 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors">
+                      <span>
+                        Siguiente
+                      </span>
                     </button>
                   )}
                 </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { auth } from '../../firebase/firebaseConfig';
 import { toast } from 'react-toastify';
 import { GraduationCap, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -33,9 +34,11 @@ const Login: React.FC = () => {
       }
 
       await login(email, password);
-      if (!isAdmin) {
+      const user = auth.currentUser;
+      if (user && !user.emailVerified) {
+        navigate('/verify-email');
+      } else {
         navigate('/dashboard');
-        toast.success('Inicio de sesión exitoso');
       }
     } catch (error: any) {
       console.error('Error al iniciar sesión:', error);

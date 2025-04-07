@@ -4,8 +4,8 @@ import {
   confirmPasswordReset, 
   verifyPasswordResetCode, 
   applyActionCode,
-  auth 
-} from '../firebase/firebaseConfig';
+} from 'firebase/auth';
+import { auth } from '../firebase/firebaseConfig';
 import { toast } from 'react-toastify';
 import { KeyRound, ArrowLeft, Eye, EyeOff, Mail } from 'lucide-react';
 

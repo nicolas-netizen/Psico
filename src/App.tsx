@@ -11,7 +11,7 @@ import { Toaster } from 'react-hot-toast';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ResetPassword from './pages/ResetPassword';
-import ResetPasswordAction from './pages/ResetPasswordAction';
+import FirebaseAction from './pages/FirebaseAction';
 
 // Componentes principales
 import Navbar from './components/Navbar';
@@ -27,7 +27,6 @@ import CustomTestCreator from './components/CustomTestCreator';
 import SolveTest from './components/SolveTest';
 import PlansPage from './pages/PlansPage';
 import TestReview from './components/TestReview';
-import EmailVerification from './pages/EmailVerification';
 import AdminReports from './pages/AdminReports';
 
 // Rutas protegidas
@@ -50,7 +49,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       <div className={`flex-grow ${!isAdminPage && !isTestPage ? 'pt-16' : 'pt-16'}`}>
         {children}
       </div>
-      {!isAdminPage && !isTestPage && !isAuthPage && <Footer />}
+      {!isAdminPage && !isTestPage && <Footer />}
       <ToastContainer position="bottom-right" />
     </div>
   );
@@ -94,10 +93,8 @@ function App() {
             <Route path="/login" element={<Layout><Login /></Layout>} />
             <Route path="/register" element={<Layout><Register /></Layout>} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/reset-password-action" element={<ResetPasswordAction />} />
-            <Route path="/verify-email" element={<EmailVerification />} />
-            {/* Ruta para la acción de Firebase Auth */}
-            <Route path="/__/auth/action" element={<ResetPasswordAction />} />
+            {/* Ruta para las acciones de Firebase Auth */}
+            <Route path="/__/auth/action" element={<FirebaseAction />} />
             <Route 
               path="/dashboard" 
               element={

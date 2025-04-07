@@ -33,7 +33,13 @@ import AdminReports from './pages/AdminReports';
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { currentUser } = useAuth();
   const location = useLocation();
-  return currentUser ? <>{children}</> : <Navigate to="/login" state={{ from: location }} replace />;
+
+  if (!currentUser) {
+    // Guardar la ruta actual para redirigir después del login
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  return <>{children}</>;
 };
 
 // Componente para manejar el layout
@@ -108,9 +114,11 @@ function App() {
             <Route 
               path="/plans" 
               element={
-                <Layout>
-                  <PlansPage />
-                </Layout>
+                <PrivateRoute>
+                  <Layout>
+                    <PlansPage />
+                  </Layout>
+                </PrivateRoute>
               } 
             />
             <Route 

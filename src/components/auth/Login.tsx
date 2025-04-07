@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { auth } from '../../firebase/firebaseConfig';
 import { toast } from 'react-toastify';
@@ -13,6 +13,7 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { login, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // Efecto para manejar la redirección cuando cambia isAdmin
@@ -35,10 +36,13 @@ const Login: React.FC = () => {
 
       await login(email, password);
       const user = auth.currentUser;
+      
       if (user && !user.emailVerified) {
         navigate('/verify-email');
       } else {
-        navigate('/dashboard');
+        // Redirigir a la página que el usuario intentaba acceder o al dashboard por defecto
+        const from = (location.state as any)?.from || '/dashboard';
+        navigate(from);
       }
     } catch (error: any) {
       console.error('Error al iniciar sesión:', error);

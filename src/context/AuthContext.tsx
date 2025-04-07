@@ -61,7 +61,9 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   // Configuración para las acciones de email
   const actionCodeSettings: ActionCodeSettings = {
-    url: window.location.origin + '/__/auth/action',
+    url: process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:5173/__/auth/action'
+      : 'https://psico-olive.vercel.app/__/auth/action',
     handleCodeInApp: true
   };
 

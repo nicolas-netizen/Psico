@@ -5,7 +5,6 @@ import { db } from "../../firebase/firebaseConfig";
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { Users, BookOpen, Clock, Target, Award, TrendingUp, AlertCircle } from 'lucide-react';
-import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -17,18 +16,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
-
-
-
-interface Report {
-  id: string;
-  userId: string;
-  type: string;
-  description: string;
-  status: 'pending' | 'in_progress' | 'resolved';
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { Line, Bar } from 'react-chartjs-2';
 
 // Registrar los componentes de Chart.js
 ChartJS.register(
@@ -41,6 +29,16 @@ ChartJS.register(
   Tooltip,
   Legend
 );
+
+interface Report {
+  id: string;
+  userId: string;
+  type: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'resolved';
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 const AdminDashboard = () => {
   const { currentUser } = useAuth();

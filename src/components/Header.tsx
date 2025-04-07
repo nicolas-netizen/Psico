@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut } from 'lucide-react';
@@ -22,9 +21,9 @@ const Header = () => {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <img
-              src="/logo.png"
-              alt="AcademiaChapiri"
-              className="h-8 w-auto"
+              src="/logo-academia-chapiri.png"
+              alt="Academia Chapiri"
+              className="h-12 w-auto"
             />
             <nav className="hidden md:flex ml-10 space-x-8">
               <a

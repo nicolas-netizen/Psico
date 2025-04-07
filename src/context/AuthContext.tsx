@@ -6,7 +6,8 @@ import {
   signOut as firebaseSignOut,
   sendEmailVerification,
   sendPasswordResetEmail,
-  User as FirebaseUser
+  User as FirebaseUser,
+  ActionCodeSettings
 } from 'firebase/auth';
 import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase/firebaseConfig';
@@ -57,6 +58,12 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Configuración para las acciones de email
+  const actionCodeSettings: ActionCodeSettings = {
+    url: window.location.origin + '/__/auth/action',
+    handleCodeInApp: true
+  };
+
   // Función para verificar si un usuario es admin
   const checkAdminStatus = async (uid: string) => {
     try {
@@ -99,7 +106,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       if (userCredential.user) {
-        await sendEmailVerification(userCredential.user);
+        await sendEmailVerification(userCredential.user, actionCodeSettings);
         await setDoc(doc(db, 'users', userCredential.user.uid), {
           email,
           role: 'user',
@@ -128,7 +135,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   const sendVerificationEmail = async () => {
     if (currentUser) {
-      await sendEmailVerification(currentUser);
+      await sendEmailVerification(currentUser, actionCodeSettings);
     }
   };
 

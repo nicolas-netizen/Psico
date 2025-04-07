@@ -89,7 +89,8 @@ export enum Aptitude {
 
 export interface Option {
   id: string;
-  text?: string;
+  text: string;
+  isCorrect: boolean;
   imageUrl?: string;
 }
 

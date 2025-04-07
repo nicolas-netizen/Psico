@@ -1,0 +1,48 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "noResults": "No results found",
+    "back": "Back"
+  },
+  "auth": {
+    "login": "Log in",
+    "register": "Sign up",
+    "logout": "Log out",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm password",
+    "forgotPassword": "Forgot your password?",
+    "resetPassword": "Reset password",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?"
+  },
+  "test": {
+    "start": "Start test",
+    "submit": "Submit answers",
+    "review": "Review answers",
+    "score": "Score",
+    "timeLeft": "Time left",
+    "questions": "Questions",
+    "correct": "Correct",
+    "incorrect": "Incorrect",
+    "results": "Results"
+  },
+  "errors": {
+    "required": "This field is required",
+    "invalidEmail": "Invalid email address",
+    "passwordMismatch": "Passwords do not match",
+    "minLength": "Must be at least {{min}} characters",
+    "maxLength": "Must be at most {{max}} characters",
+    "networkError": "Network error",
+    "unexpectedError": "Unexpected error"
+  }
+}

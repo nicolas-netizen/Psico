@@ -12,7 +12,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase/firebaseConfig';
-import { Test } from '../types/Test';
+import { Test } from '../types/test';
 import { Plan } from '../types/Plan';
 
 interface TestResult {

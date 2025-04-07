@@ -55,7 +55,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       <div className={`flex-grow ${!isAdminPage && !isTestPage ? 'pt-16' : 'pt-16'}`}>
         {children}
       </div>
-      {!isAdminPage && !isTestPage && <Footer />}
+      {!isAdminPage && !isTestPage && !isAuthPage && <Footer />}
       <ToastContainer position="bottom-right" />
     </div>
   );

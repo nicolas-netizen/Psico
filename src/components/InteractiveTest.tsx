@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Block, Option } from '../types/Test';
+import { Block, Option } from '../types/test';
 import { motion } from 'framer-motion';
 import { getOptimizedImageUrl } from '../utils/imageUtils';
 

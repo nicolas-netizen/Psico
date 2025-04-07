@@ -28,6 +28,7 @@ interface MemoryQuestion extends BaseQuestion {
   images: string[];
   correctImageIndex: number;
   memorizeTime?: number; // tiempo en segundos para memorizar
+  shuffledOrder?: string[]; // orden aleatorio de las imágenes para la selección
 }
 
 type Question = TextQuestion | MemoryQuestion;
@@ -167,12 +168,12 @@ const SolveTest = () => {
           } else if (q.type === 'Memoria') {
             return {
               id: q.id || Math.random().toString(),
-              type: q.type,
-              images: q.images || [],
-              correctImageIndex: q.correctImageIndex || 0,
-              memorizeTime: q.memorizeTime || 10,
-              blockType: q.blockType,
-              blockName: q.blockName
+              type: 'Memoria',
+              images: Array.isArray(q.images) ? q.images : [],
+              correctImageIndex: typeof q.correctImageIndex === 'number' ? q.correctImageIndex : 0,
+              memorizeTime: typeof q.memorizeTime === 'number' ? q.memorizeTime : 10,
+              blockType: q.blockType || 'Memoria',
+              blockName: q.blockName || 'Memoria'
             } as MemoryQuestion;
           } else {
             throw new Error(`Tipo de pregunta desconocido: ${q.type}`);
@@ -470,47 +471,76 @@ const SolveTest = () => {
     if (currentQuestion.type === 'Memoria') {
       const memoryQuestion = currentQuestion as MemoryQuestion;
       const memorizeTime = memoryQuestion.memorizeTime || 10; // 10 segundos por defecto
+      const shuffledImages = [...memoryQuestion.images];
 
       if (showingMemoryImages) {
+        // Durante la fase de memorización, solo mostrar la imagen correcta
+        const correctImage = memoryQuestion.images[memoryQuestion.correctImageIndex];
         return (
           <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl mb-4 shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-base font-bold text-gray-800">
-                Memoriza las siguientes imágenes
+                Memoriza la siguiente imagen
               </h2>
               <div className="text-lg font-bold text-[#91c26a]">
                 {memoryTimer}s
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              {memoryQuestion.images.map((imageUrl, index) => (
-                <div key={index} className="flex justify-center">
-                  <img 
-                    src={getOptimizedImageUrl(imageUrl, {
-                      width: 400,
-                      quality: 80
-                    })} 
-                    alt={`Imagen ${index + 1}`}
-                    className="max-w-full h-auto rounded-lg shadow-md"
-                    style={{ maxHeight: '200px' }}
-                    loading="lazy"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'https://via.placeholder.com/150x150?text=Error+al+cargar+imagen';
-                    }}
-                  />
-                </div>
-              ))}
+            <div className="flex justify-center mb-4">
+              <img 
+                src={correctImage} 
+                alt="Imagen a memorizar"
+                className="max-w-full h-auto rounded-lg shadow-md"
+                style={{ maxHeight: '400px', objectFit: 'contain' }}
+                loading="lazy"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = 'https://via.placeholder.com/150x150?text=Error+al+cargar+imagen';
+                }}
+              />
             </div>
           </div>
         );
       }
+
+      // En la fase de selección, mostrar todas las opciones
+      // Asegurarse de que las imágenes estén en un orden aleatorio pero consistente
+      if (!memoryQuestion.shuffledOrder) {
+        for (let i = shuffledImages.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffledImages[i], shuffledImages[j]] = [shuffledImages[j], shuffledImages[i]];
+        }
+        memoryQuestion.shuffledOrder = shuffledImages;
+      }
+      const displayImages = memoryQuestion.shuffledOrder || shuffledImages;
 
       return (
         <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl mb-4 shadow-sm border border-gray-100">
           <h2 className="text-base font-bold text-gray-800 mb-4">
             Selecciona la imagen que viste anteriormente
           </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {displayImages.map((imageUrl: string, index: number) => (
+              <div key={index} className="flex justify-center">
+                <button
+                  onClick={() => handleAnswerSelection(index)}
+                  className={`border-2 rounded-lg p-2 transition-all duration-200 ${selectedAnswers[currentQuestionIndex] === index ? 'border-[#91c26a] shadow-lg scale-105' : 'border-transparent hover:border-gray-300'}`}
+                >
+                  <img 
+                    src={imageUrl} 
+                    alt={`Opción ${index + 1}`}
+                    className="max-w-full h-auto rounded-lg"
+                    style={{ maxHeight: '300px', objectFit: 'contain' }}
+                    loading="lazy"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'https://via.placeholder.com/150x150?text=Error+al+cargar+imagen';
+                    }}
+                  />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }

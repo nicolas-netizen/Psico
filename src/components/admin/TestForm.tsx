@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { auth } from '../../firebase/firebaseConfig';
+import { Test, Block, Question, Option } from '../../types/test';
 import { useNavigate } from 'react-router-dom';
-import { Test, TestBlock } from '../../types/Test';
 import { toast } from 'react-toastify';
 
 interface TestFormProps {
@@ -8,19 +9,32 @@ interface TestFormProps {
 }
 
 const TestForm: React.FC<TestFormProps> = ({ onSubmit }) => {
+  const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [blocks, setBlocks] = useState<Omit<TestBlock, 'id'>[]>([]);
-  const [currentBlock, setCurrentBlock] = useState<Omit<TestBlock, 'id'>>({
-    title: '',
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [currentBlock, setCurrentBlock] = useState<Omit<Block, 'id'>>({
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [currentBlock, setCurrentBlock] = useState<Omit<Block, 'id'>>({
+    name: '',
     description: '',
     timeLimit: 7,
-    type: 'verbal',
-    questions: []
+    questions: [],
+    showExplanation: false
   });
   const navigate = useNavigate();
 
   const handleAddQuestion = () => {
+    const newQuestion: Question = {
+      id: Date.now().toString(),
+      type: 'text',
+      text: '',
+      options: [],
+      correctAnswer: 0
+    };
+
     setCurrentBlock(prev => ({
       ...prev,
       questions: [
@@ -35,11 +49,15 @@ const TestForm: React.FC<TestFormProps> = ({ onSubmit }) => {
     }));
   };
 
-  const handleQuestionChange = (index: number, field: string, value: string) => {
+  const handleQuestionChange = (index: number, field: keyof Question, value: any) => {
     setCurrentBlock(prev => ({
       ...prev,
       questions: prev.questions.map((q, i) => 
-        i === index ? { ...q, [field]: value } : q
+        i === index ? { 
+          ...q, 
+          [field]: value,
+          type: q.type || 'text'
+        } : q
       )
     }));
   };
@@ -50,14 +68,32 @@ const TestForm: React.FC<TestFormProps> = ({ onSubmit }) => {
       questions: prev.questions.map((q, i) => 
         i === questionIndex ? {
           ...q,
-          options: q.options.map((opt, j) => j === optionIndex ? value : opt)
+          options: q.options.map((opt, j) => 
+            j === optionIndex ? { 
+              id: (opt as Option).id || Date.now().toString(),
+              text: value,
+              isCorrect: (opt as Option).isCorrect || false
+            } : opt
+          )
         } : q
       )
     }));
   };
 
-  const handleCorrectAnswerChange = (questionIndex: number, value: number) => {
+  const handleCorrectAnswerChange = (questionIndex: number, optionIndex: number) => {
     setCurrentBlock(prev => ({
+      ...prev,
+      questions: prev.questions.map((q, i) => 
+        i === questionIndex ? {
+          ...q,
+          options: q.options.map((opt, j) => ({
+            ...opt,
+            isCorrect: j === optionIndex
+          })),
+          correctAnswer: optionIndex
+        } : q
+      )
+    }));
       ...prev,
       questions: prev.questions.map((q, i) => 
         i === questionIndex ? { ...q, correctAnswer: value } : q
@@ -66,26 +102,63 @@ const TestForm: React.FC<TestFormProps> = ({ onSubmit }) => {
   };
 
   const handleAddBlock = () => {
-    if (!currentBlock.title || currentBlock.questions.length === 0) {
+    if (!currentBlock.name || currentBlock.questions.length === 0) {
       toast.error('El bloque debe tener un título y al menos una pregunta');
       return;
     }
 
-    setBlocks(prev => [...prev, currentBlock]);
+    const newBlock: Block = {
+      ...currentBlock,
+      id: Date.now().toString(),
+      questions: currentBlock.questions.map(q => ({
+        ...q,
+        type: q.type || 'text',
+        options: q.options.map(opt => ({
+          id: (opt as Option).id || Date.now().toString(),
+          text: (opt as Option).text || '',
+          isCorrect: (opt as Option).isCorrect || false
+        }))
+      }))
+    };
+
+    setBlocks(prev => [...prev, newBlock]);
     setCurrentBlock({
-      title: '',
+      name: '',
       description: '',
       timeLimit: 7,
-      type: 'verbal',
-      questions: []
+      questions: [],
+      showExplanation: false
     });
+      const newBlock: Block = {
+        ...currentBlock,
+        id: Date.now().toString(),
+        questions: currentBlock.questions.map(q => ({
+          ...q,
+          type: q.type || 'text',
+          options: q.options.map(opt => ({
+            id: (opt as Option).id || Date.now().toString(),
+            text: (opt as Option).text || '',
+            isCorrect: (opt as Option).isCorrect || false
+          }))
+        }))
+      };
+      setBlocks(prev => [...prev, newBlock]);
+      setCurrentBlock({
+        name: '',
+        description: '',
+        timeLimit: 7,
+        questions: [],
+        showExplanation: false
+      });
+    };
+    addBlock();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!title || !description || blocks.length === 0) {
-      toast.error('Por favor completa todos los campos requeridos');
+      toast.error('Por favor complete todos los campos requeridos');
       return;
     }
 
@@ -93,209 +166,204 @@ const TestForm: React.FC<TestFormProps> = ({ onSubmit }) => {
       await onSubmit({
         title,
         description,
-        blocks: blocks.map(block => ({
-          ...block,
-          id: Date.now().toString()
-        }))
+        blocks,
+        createdBy: auth.currentUser?.uid || '',
+        isPublic: false
       });
       toast.success('Test creado exitosamente');
       navigate('/admin/tests');
     } catch (error) {
-      console.error('Error al crear el test:', error);
       toast.error('Error al crear el test');
+      console.error(error);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-bold mb-6">Información General</h2>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                Título del Test
-              </label>
-              <input
-                type="text"
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                Descripción
-              </label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
-                rows={3}
-                required
-              />
-            </div>
-          </div>
+    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold mb-6">Crear Nuevo Test</h2>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label className="block text-gray-700 text-sm font-bold mb-2">
+            Título
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            required
+          />
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-bold mb-6">Bloques del Test</h2>
-          
-          {/* Lista de bloques agregados */}
-          {blocks.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-4">Bloques creados:</h3>
-              <div className="space-y-4">
-                {blocks.map((block, index) => (
-                  <div key={index} className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-medium">{block.title}</h4>
-                      <span className="text-sm text-gray-500">
-                        {block.questions.length} preguntas - {block.timeLimit} minutos
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        <div className="mb-4">
+          <label className="block text-gray-700 text-sm font-bold mb-2">
+            Descripción
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            rows={3}
+            required
+          />
+        </div>
 
-          {/* Formulario del bloque actual */}
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="blockTitle" className="block text-sm font-medium text-gray-700">
-                Título del Bloque
+        <div className="mb-6">
+          <h3 className="text-xl font-bold mb-4">Bloques</h3>
+          {blocks.map((block, index) => (
+            <div key={block.id} className="mb-4 p-4 border rounded">
+              <h4 className="font-bold">{block.name}</h4>
+              <p className="text-gray-600">{block.description}</p>
+              <p className="text-sm text-gray-500">
+                {block.questions.length} preguntas
+              </p>
+            </div>
+          ))}
+
+          <div className="mb-4 p-4 border rounded">
+            <h4 className="font-bold mb-4">Nuevo Bloque</h4>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Nombre del Bloque
               </label>
               <input
                 type="text"
-                id="blockTitle"
-                value={currentBlock.title}
-                onChange={(e) => setCurrentBlock(prev => ({ ...prev, title: e.target.value }))}
-                className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+                value={currentBlock.name}
+                onChange={(e) =>
+                  setCurrentBlock(prev => ({ ...prev, name: e.target.value }))
+                }
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               />
             </div>
 
-            <div>
-              <label htmlFor="blockDescription" className="block text-sm font-medium text-gray-700">
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
                 Descripción del Bloque
               </label>
               <textarea
-                id="blockDescription"
-                value={currentBlock.description}
-                onChange={(e) => setCurrentBlock(prev => ({ ...prev, description: e.target.value }))}
-                className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
+                value={currentBlock.description || ''}
+                onChange={(e) =>
+                  setCurrentBlock(prev => ({ ...prev, description: e.target.value }))
+                }
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                 rows={2}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="blockType" className="block text-sm font-medium text-gray-700">
-                  Tipo de Bloque
-                </label>
-                <select
-                  id="blockType"
-                  value={currentBlock.type}
-                  onChange={(e) => setCurrentBlock(prev => ({ ...prev, type: e.target.value as 'verbal' | 'numerical' | 'abstract' }))}
-                  className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
-                >
-                  <option value="verbal">Verbal</option>
-                  <option value="numerical">Numérico</option>
-                  <option value="abstract">Abstracto</option>
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="timeLimit" className="block text-sm font-medium text-gray-700">
-                  Tiempo Límite (minutos)
-                </label>
-                <input
-                  type="number"
-                  id="timeLimit"
-                  value={currentBlock.timeLimit}
-                  onChange={(e) => setCurrentBlock(prev => ({ ...prev, timeLimit: parseInt(e.target.value) }))}
-                  className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
-                  min="1"
-                />
-              </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Tiempo Límite (minutos)
+              </label>
+              <input
+                type="number"
+                value={currentBlock.timeLimit || 7}
+                onChange={(e) =>
+                  setCurrentBlock(prev => ({ ...prev, timeLimit: parseInt(e.target.value) }))
+                }
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                min={1}
+              />
             </div>
 
-            {/* Preguntas del bloque */}
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold">Preguntas</h3>
+            <div className="mb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={currentBlock.showExplanation || false}
+                  onChange={(e) =>
+                    setCurrentBlock(prev => ({ ...prev, showExplanation: e.target.checked }))
+                  }
+                  className="mr-2"
+                />
+                <span className="text-gray-700 text-sm font-bold">Mostrar Explicación</span>
+              </label>
+            </div>
+
+            <div className="mb-4">
+              <h5 className="font-bold mb-2">Preguntas</h5>
               {currentBlock.questions.map((question, qIndex) => (
-                <div key={question.id} className="p-4 border border-gray-200 rounded-lg space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                <div key={question.id} className="mb-4 p-3 border rounded">
+                  <div className="mb-2">
+                    <label className="block text-gray-700 text-sm font-bold mb-2">
                       Pregunta {qIndex + 1}
                     </label>
                     <input
                       type="text"
-                      value={question.text}
+                      value={question.text || ''}
                       onChange={(e) => handleQuestionChange(qIndex, 'text', e.target.value)}
-                      className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
-                      placeholder="Escribe la pregunta..."
+                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="mb-2">
+                    <label className="block text-gray-700 text-sm font-bold mb-2">
+                      Tipo de Pregunta
+                    </label>
+                    <select
+                      value={question.type}
+                      onChange={(e) => handleQuestionChange(qIndex, 'type', e.target.value as Question['type'])}
+                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    >
+                      <option value="text">Texto</option>
+                      <option value="image">Imagen</option>
+                      <option value="mixed">Mixta</option>
+                    </select>
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="block text-gray-700 text-sm font-bold mb-2">
+                      Opciones
+                    </label>
                     {question.options.map((option, oIndex) => (
-                      <div key={oIndex} className="flex items-center space-x-2">
+                      <div key={option.id} className="flex items-center mb-2">
                         <input
                           type="radio"
                           name={`correct-${question.id}`}
-                          checked={question.correctAnswer === oIndex}
+                          checked={oIndex === question.correctAnswer}
                           onChange={() => handleCorrectAnswerChange(qIndex, oIndex)}
-                          className="h-4 w-4 text-[#91c26a] focus:ring-[#91c26a] border-gray-300"
+                          className="mr-2"
                         />
                         <input
                           type="text"
-                          value={option}
+                          value={(option as Option).text}
                           onChange={(e) => handleOptionChange(qIndex, oIndex, e.target.value)}
-                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#91c26a] focus:border-transparent"
-                          placeholder={`Opción ${oIndex + 1}`}
+                          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                         />
                       </div>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => handleAddOption(qIndex)}
+                      className="mt-2 bg-blue-500 text-white py-1 px-3 rounded hover:bg-blue-600"
+                    >
+                      Agregar Opción
+                    </button>
                   </div>
                 </div>
               ))}
-
               <button
                 type="button"
                 onClick={handleAddQuestion}
-                className="w-full py-2 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600"
               >
-                + Agregar Pregunta
+                Agregar Pregunta
               </button>
             </div>
 
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleAddBlock}
-                className="bg-[#91c26a] text-white py-2 px-4 rounded-lg hover:bg-[#7ea756] transition-colors duration-200"
-              >
-                Guardar Bloque
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleAddBlock}
+              className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
+            >
+              Guardar Bloque
+            </button>
           </div>
         </div>
 
-        <div className="flex justify-end space-x-4">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/tests')}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-          >
-            Cancelar
-          </button>
+        <div className="flex justify-end">
           <button
             type="submit"
-            className="bg-[#91c26a] text-white py-2 px-4 rounded-lg hover:bg-[#7ea756] transition-colors duration-200"
+            className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600"
           >
             Crear Test
           </button>

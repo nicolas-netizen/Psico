@@ -1,0 +1,48 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "noResults": "No se encontraron resultados",
+    "back": "Volver"
+  },
+  "auth": {
+    "login": "Iniciar sesión",
+    "register": "Registrarse",
+    "logout": "Cerrar sesión",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "confirmPassword": "Confirmar contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "resetPassword": "Restablecer contraseña",
+    "noAccount": "¿No tienes una cuenta?",
+    "haveAccount": "¿Ya tienes una cuenta?"
+  },
+  "test": {
+    "start": "Comenzar test",
+    "submit": "Enviar respuestas",
+    "review": "Revisar respuestas",
+    "score": "Puntuación",
+    "timeLeft": "Tiempo restante",
+    "questions": "Preguntas",
+    "correct": "Correctas",
+    "incorrect": "Incorrectas",
+    "results": "Resultados"
+  },
+  "errors": {
+    "required": "Este campo es requerido",
+    "invalidEmail": "Correo electrónico inválido",
+    "passwordMismatch": "Las contraseñas no coinciden",
+    "minLength": "Debe tener al menos {{min}} caracteres",
+    "maxLength": "Debe tener como máximo {{max}} caracteres",
+    "networkError": "Error de conexión",
+    "unexpectedError": "Error inesperado"
+  }
+}

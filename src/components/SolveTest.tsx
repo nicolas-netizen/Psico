@@ -12,6 +12,7 @@ interface BaseQuestion {
   type: 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia' | 'TextoImagen';
   blockType: string;
   blockName: string;
+  blockTimeLimit?: number; // Tiempo límite en minutos para el bloque
 }
 
 interface TextQuestion extends BaseQuestion {
@@ -38,6 +39,7 @@ interface Test {
   isTemporary?: boolean;
   userId: string;
   timeLimit?: number;
+  startTime?: string;
 }
 
 const SolveTest = () => {
@@ -49,13 +51,16 @@ const SolveTest = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [startTime] = useState(new Date());
+  const [blockTimeLeft, setBlockTimeLeft] = useState<number | null>(null);
   const [showingMemoryImages, setShowingMemoryImages] = useState(false);
   const [memoryTimer, setMemoryTimer] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [isTestFinished, setIsTestFinished] = useState(false);
+  const [showBlockChangeModal, setShowBlockChangeModal] = useState(false);
+  const [pendingBlockChange, setPendingBlockChange] = useState<{index: number, blockName: string} | null>(null);
   const [testResult, setTestResult] = useState<{score: number, answers: any[], recommendations: { blockName: string, tips: string[], exercises: string[], resources: string[] }[]}>(); 
+  const [showBlockIntro, setShowBlockIntro] = useState(true);
+  const [currentBlock, setCurrentBlock] = useState<string>('');
   const currentQuestion = test?.questions[currentQuestionIndex];
 
   useEffect(() => {
@@ -63,14 +68,37 @@ const SolveTest = () => {
   }, [testId]);
 
   useEffect(() => {
-    if (test?.timeLimit) {
-      setTimeLeft(test.timeLimit);
+    if (test?.questions && test.questions.length > 0) {
+      // Solo mostrar la introducción del bloque al cargar el test
+      if (currentQuestionIndex === 0) {
+        setCurrentBlock(test.questions[0].blockName);
+        setShowBlockIntro(true);
+      }
+    }
+  }, [test]);
+
+  useEffect(() => {
+    if (test?.questions && test.questions.length > 0) {
+      // Obtener el tiempo límite del bloque actual
+      const currentBlockTime = test.questions[currentQuestionIndex].blockTimeLimit || 15; // Default 15 minutos si no está especificado
+      setBlockTimeLeft(currentBlockTime * 60); // Convertir a segundos
+      // Iniciar el tiempo del nuevo bloque
+      setBlockTimeLeft(currentBlockTime * 60);
+
       const timer = setInterval(() => {
-        setTimeLeft(prev => {
+        setBlockTimeLeft(prev => {
           if (prev === null || prev <= 0) {
             clearInterval(timer);
-            handleSubmit();
-            return 0;
+            // Si se acaba el tiempo del bloque, pasar al siguiente
+            const nextBlockIndex = findNextBlockStartIndex(currentQuestionIndex, test.questions);
+            if (nextBlockIndex !== -1) {
+              setCurrentQuestionIndex(nextBlockIndex);
+              setShowBlockIntro(true);
+              return test.questions[nextBlockIndex].blockTimeLimit ? test.questions[nextBlockIndex].blockTimeLimit * 60 : 15 * 60;
+            } else {
+              handleSubmit();
+              return 0;
+            }
           }
           return prev - 1;
         });
@@ -78,7 +106,7 @@ const SolveTest = () => {
 
       return () => clearInterval(timer);
     }
-  }, [test]);
+  }, [currentQuestionIndex, test]);
 
   useEffect(() => {
     const state = location.state as { blocks?: { type: string; count: number; timeLimit: number }[] };
@@ -91,15 +119,17 @@ const SolveTest = () => {
         questions: [],
         isTemporary: true,
         userId: currentUser?.uid || '',
-        timeLimit: totalTime
+        timeLimit: totalTime,
+        startTime: new Date().toISOString()
       };
       setTest(tempTest);
-      setTimeLeft(totalTime * 60);
+      setBlockTimeLeft(totalTime * 60);
     }
   }, [location.state, currentUser]);
 
   const loadTest = async () => {
     if (!testId || !currentUser) return;
+    setShowBlockIntro(true);
 
     try {
       // Primero intentamos buscar en tests
@@ -115,6 +145,11 @@ const SolveTest = () => {
       if (testDoc.exists()) {
         const testData = testDoc.data();
         console.log('Test data loaded:', testData); // Debug
+
+        // Establecer el bloque inicial
+        if (testData.questions && testData.questions.length > 0) {
+          setCurrentBlock(testData.questions[0].blockName);
+        }
 
         const formattedQuestions = testData.questions.map((q: any) => {
           console.log('Processing question:', q); // Debug
@@ -173,14 +208,37 @@ const SolveTest = () => {
     setSelectedAnswers(newAnswers);
   };
 
+  // Función para encontrar el índice de la primera pregunta del siguiente bloque
+  const findNextBlockStartIndex = (currentIndex: number, questions: Question[]): number => {
+    const currentBlockName = questions[currentIndex].blockName;
+    for (let i = currentIndex + 1; i < questions.length; i++) {
+      if (questions[i].blockName !== currentBlockName) {
+        return i;
+      }
+    }
+    return -1; // No hay más bloques
+  };
+
   const nextQuestion = () => {
     if (test && currentQuestionIndex < test.questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      if (test.questions[currentQuestionIndex + 1].type === 'Memoria') {
-        const memorizeTime = (test.questions[currentQuestionIndex + 1] as MemoryQuestion).memorizeTime || 10;
-        setShowingMemoryImages(true);
-        setMemoryTimer(memorizeTime);
+      const nextIndex = currentQuestionIndex + 1;
+      
+      // Verificar si el siguiente bloque es diferente
+      if (test.questions[nextIndex].blockName !== test.questions[currentQuestionIndex].blockName) {
+        setShowBlockIntro(true);
+        setCurrentBlock(test.questions[nextIndex].blockName);
+        // Reiniciar el tiempo para el nuevo bloque
+        const newBlockTimeLimit = test.questions[nextIndex].blockTimeLimit || 15;
+        setBlockTimeLeft(newBlockTimeLimit * 60);
       }
+
+      // Manejar preguntas de memoria
+      if (test.questions[nextIndex].type === 'Memoria') {
+        setShowingMemoryImages(true);
+        setMemoryTimer((test.questions[nextIndex] as MemoryQuestion).memorizeTime || 10);
+      }
+
+      setCurrentQuestionIndex(nextIndex);
     }
   };
 
@@ -316,8 +374,9 @@ const SolveTest = () => {
     setSubmitting(true);
     try {
       const score = calculateScore();
-      const endTime = new Date();
-      const timeSpent = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+      const currentTime = new Date();
+      const startTimeDate = test?.startTime ? new Date(test.startTime) : new Date();
+      const timeSpent = Math.floor((currentTime.getTime() - startTimeDate.getTime()) / 1000);
 
       // Preparar las respuestas con información de bloques
       const answers = test.questions.map((question, index) => {
@@ -691,21 +750,55 @@ const SolveTest = () => {
                   </button>
                 </div>
               </div>
+            ) : showBlockIntro ? (
+              <div className="flex flex-col items-center justify-center min-h-[400px] p-8 bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-100">
+                <div className="flex flex-col items-center space-y-8 max-w-lg text-center">
+                  {/* Ícono decorativo */}
+                  <div className="w-20 h-20 bg-gradient-to-br from-[#91c26a]/20 to-[#82b35b]/20 rounded-full flex items-center justify-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-[#91c26a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0012 18.75c-1.03 0-1.96-.413-2.634-1.08l-.548.547z" />
+                    </svg>
+                  </div>
+                  
+                  {/* Título del bloque */}
+                  <div className="space-y-4">
+                    <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                      {currentBlock}
+                    </h2>
+                    <p className="text-gray-600 text-lg">
+                      Prepárate para comenzar esta sección del test
+                    </p>
+                  </div>
+
+                  {/* Botón de comenzar */}
+                  <button
+                    onClick={() => setShowBlockIntro(false)}
+                    className="mt-8 px-10 py-4 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white text-lg font-semibold rounded-xl
+                      shadow-lg shadow-[#91c26a]/20 hover:shadow-xl hover:shadow-[#91c26a]/40
+                      transform hover:scale-105 active:scale-95
+                      transition-all duration-300 ease-in-out
+                      focus:outline-none focus:ring-2 focus:ring-[#91c26a] focus:ring-opacity-50"
+                  >
+                    Comenzar
+                    <span className="ml-2">→</span>
+                  </button>
+                </div>
+              </div>
             ) : (
               <>
-                {/* Timer Section */}
-                <div className="flex justify-between items-center mb-4">
+                {/* Header with Timer */}
+                <div className="flex justify-between items-center mb-6">
                   <h1 className="text-lg font-semibold text-gray-700">Evaluación Psicológica</h1>
-                  {timeLeft !== null && (
+                  {blockTimeLeft !== null && (
                     <div className="inline-flex items-center bg-gradient-to-r from-[#91c26a]/20 to-[#91c26a]/10 px-3 py-1.5 rounded-lg">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#91c26a] mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <div>
                         <div className="text-lg font-bold text-gray-800">
-                          {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                          {Math.floor(blockTimeLeft / 60)}:{(blockTimeLeft % 60).toString().padStart(2, '0')}
                         </div>
-                        <div className="text-xs text-[#91c26a] font-medium">Tiempo restante</div>
+                        <div className="text-xs text-[#91c26a] font-medium">Tiempo del bloque</div>
                       </div>
                     </div>
                   )}
@@ -717,42 +810,161 @@ const SolveTest = () => {
                   {renderOptions()}
                 </div>
 
-                {/* Navigation Buttons */}
-                <div className="flex justify-between mt-6">
-                  <button
-                    onClick={previousQuestion}
-                    disabled={currentQuestionIndex === 0}
-                    className={`px-4 py-2 rounded-lg transition-colors
-                      ${currentQuestionIndex === 0
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
-                      }`}
-                  >
-                    Anterior
-                  </button>
+                {/* Bottom Navigation and Progress */}
+                <div className="mt-6 space-y-4">
+                  {/* Progress and Question Navigation */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-600">Bloque actual:</span>
+                        <span className="text-sm font-bold text-gray-800">{currentBlock}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-gray-600">Pregunta:</span>
+                        <span className="text-sm font-bold text-gray-800">
+                          {currentQuestionIndex + 1} de {test?.questions.length}
+                        </span>
+                      </div>
+                    </div>
 
-                  {currentQuestionIndex === test.questions.length - 1 && !showingMemoryImages ? (
-                    <button
-                      onClick={handleSubmit}
-                      disabled={submitting}
-                      className="px-4 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg hover:from-[#82b35b] hover:to-[#73a44c] transition-colors disabled:opacity-50"
-                    >
-                      {submitting ? 'Enviando...' : 'Finalizar Test'}
-                    </button>
-                  ) : !showingMemoryImages && (
-                    <button
-                      onClick={nextQuestion}
-                      className="px-6 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors">
-                      <span>
-                        Siguiente
-                      </span>
-                    </button>
-                  )}
+                    {/* Question Navigation */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {test?.questions.map((question, index) => {
+                        const isCurrentBlock = question.blockName === currentBlock;
+                        const isCurrentQuestion = index === currentQuestionIndex;
+                        const hasAnswer = selectedAnswers[index] !== undefined;
+
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              const targetQuestion = test?.questions[index];
+                              if (targetQuestion.blockName !== currentBlock) {
+                                // Si es un bloque diferente, mostrar modal
+                                setPendingBlockChange({ index, blockName: targetQuestion.blockName });
+                                setShowBlockChangeModal(true);
+                              } else {
+                                // Si es el mismo bloque, cambiar directamente
+                                setCurrentQuestionIndex(index);
+                              }
+                            }}
+                            className={`
+                              w-8 h-8 rounded-lg text-sm font-medium transition-all duration-200
+                              flex items-center justify-center
+                              ${isCurrentBlock ? 'border-2' : 'border'}
+                              ${isCurrentQuestion
+                                ? 'bg-[#91c26a] text-white border-[#91c26a]'
+                                : hasAnswer
+                                  ? isCurrentBlock
+                                    ? 'bg-[#91c26a]/10 text-[#91c26a] border-[#91c26a]/30'
+                                    : 'bg-gray-200 text-gray-600 border-gray-300'
+                                  : 'bg-gray-50 text-gray-400 border-gray-200'}
+                              ${!isCurrentQuestion && isCurrentBlock && 'hover:border-[#91c26a]/50 hover:bg-[#91c26a]/5'}
+                              ${!isCurrentBlock && 'cursor-help'}
+                            `}
+                          >
+                            {index + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Navigation Buttons */}
+                    <div className="flex justify-between">
+                      <button
+                        onClick={previousQuestion}
+                        disabled={currentQuestionIndex === 0}
+                        className={`px-4 py-2 rounded-lg transition-colors
+                          ${currentQuestionIndex === 0
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                          }`}
+                      >
+                        Anterior
+                      </button>
+
+                      {currentQuestionIndex === test.questions.length - 1 && !showingMemoryImages ? (
+                        <button
+                          onClick={handleSubmit}
+                          disabled={submitting}
+                          className="px-4 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg hover:from-[#82b35b] hover:to-[#73a44c] transition-colors disabled:opacity-50"
+                        >
+                          {submitting ? 'Enviando...' : 'Finalizar Test'}
+                        </button>
+                      ) : !showingMemoryImages && (
+                        <button
+                          onClick={nextQuestion}
+                          className="px-6 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors">
+                          <span>
+                            Siguiente
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </>
             )}
           </div>
         </div>
+
+        {/* Modal de cambio de bloque */}
+        {showBlockChangeModal && pendingBlockChange && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 transform transition-all duration-300 scale-100 opacity-100 shadow-2xl">
+              <div className="text-center space-y-4">
+                {/* Ícono */}
+                <div className="mx-auto w-16 h-16 bg-[#91c26a]/10 rounded-full flex items-center justify-center mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#91c26a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                </div>
+
+                {/* Título */}
+                <h3 className="text-xl font-bold text-gray-900">
+                  Cambio de Bloque
+                </h3>
+
+                {/* Mensaje */}
+                <p className="text-gray-600">
+                  ¿Deseas cambiar al bloque <span className="font-semibold text-gray-900">{pendingBlockChange.blockName}</span>?
+                </p>
+
+                {/* Botones */}
+                <div className="flex space-x-3 mt-6">
+                  <button
+                    onClick={() => {
+                      setShowBlockChangeModal(false);
+                      setPendingBlockChange(null);
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (pendingBlockChange && test) {
+                        setCurrentBlock(pendingBlockChange.blockName);
+                        setShowBlockIntro(true);
+                        setCurrentQuestionIndex(pendingBlockChange.index);
+                        // Reiniciar el tiempo para el nuevo bloque
+                        const newBlockTimeLimit = test.questions[pendingBlockChange.index].blockTimeLimit || 15;
+                        setBlockTimeLeft(newBlockTimeLimit * 60);
+                        setShowBlockChangeModal(false);
+                        setPendingBlockChange(null);
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white rounded-lg
+                      hover:from-[#82b35b] hover:to-[#73a44c] transition-all duration-300
+                      transform hover:scale-105 active:scale-95"
+                  >
+                    Cambiar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

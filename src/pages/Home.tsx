@@ -1,12 +1,15 @@
 import { lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import Hero from '../components/Hero';
+import FloatingCTA from '../components/FloatingCTA';
+import TestAnimation from '../components/TestAnimation';
 
 // Lazy load de componentes secundarios
 const Stats = lazy(() => import('../components/Stats'));
 const Features = lazy(() => import('../components/Features'));
 const Testimonials = lazy(() => import('../components/Testimonials'));
 const PlanList = lazy(() => import('../components/plans/PlanList'));
+const WhyChooseUs = lazy(() => import('../components/WhyChooseUs'));
 
 // Componente de carga
 const LoadingComponent = () => (
@@ -17,8 +20,28 @@ const LoadingComponent = () => (
 
 const Home = () => {
   return (
-    <div className="bg-gradient-to-b from-white to-[#f8faf6]">
+    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
       <Hero />
+      
+      {/* Test Animation Section */}
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+              Experimenta Nuestros Tests
+            </h2>
+            <p className="mt-4 text-xl text-gray-600">
+              Prueba un ejemplo de nuestros tests psicotécnicos interactivos
+            </p>
+          </div>
+          <TestAnimation />
+        </div>
+      </section>
+
+      {/* Por qué elegirnos */}
+      <Suspense fallback={<LoadingComponent />}>
+        <WhyChooseUs />
+      </Suspense>
       
       {/* Sección de Estadísticas con fondo suave */}
       <div className="bg-[#f0f7eb]">
@@ -55,7 +78,7 @@ const Home = () => {
           </div>
           
           <Suspense fallback={<LoadingComponent />}>
-            <PlanList hideActions={true} />
+            <PlanList hideActions={true} maxPlans={3} />
           </Suspense>
           
           <div className="text-center mt-12">
@@ -71,6 +94,11 @@ const Home = () => {
           </div>
         </div>
       </section>
+
+      {/* CTA Flotante */}
+      <Suspense fallback={null}>
+        <FloatingCTA />
+      </Suspense>
     </div>
   );
 };

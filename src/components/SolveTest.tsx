@@ -320,51 +320,75 @@ const SolveTest = () => {
       const timeSpent = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
 
       // Preparar las respuestas con información de bloques
-      const answers = test.questions.map((question, index) => ({
-        blockName: question.blockName,
-        isCorrect: selectedAnswers[index] === (
-          question.type === 'Memoria' 
-            ? (question as MemoryQuestion).correctImageIndex 
-            : (question as TextQuestion).correctAnswer
-        ),
-        questionId: question.id,
-        question: question.type === 'Texto' || question.type === 'TextoImagen' 
-          ? (question as TextQuestion).text 
-          : 'Pregunta de memoria',
-        selectedAnswer: selectedAnswers[index],
-        correctAnswer: question.type === 'Memoria'
-          ? (question as MemoryQuestion).correctImageIndex
-          : (question as TextQuestion).correctAnswer
-      }));
+      const answers = test.questions.map((question, index) => {
+        const isMemoryQuestion = question.type === 'Memoria';
+        const isTextQuestion = question.type === 'Texto' || question.type === 'TextoImagen';
+        
+        const baseAnswer = {
+          blockName: question.blockName || 'Sin bloque',
+          questionId: question.id,
+          questionType: question.type,
+          selectedAnswer: selectedAnswers[index] ?? -1
+        };
+
+        if (isMemoryQuestion) {
+          const memoryQ = question as MemoryQuestion;
+          return {
+            ...baseAnswer,
+            isCorrect: selectedAnswers[index] === memoryQ.correctImageIndex,
+            question: 'Pregunta de memoria',
+            correctAnswer: memoryQ.correctImageIndex
+          };
+        } else if (isTextQuestion) {
+          const textQ = question as TextQuestion;
+          return {
+            ...baseAnswer,
+            isCorrect: selectedAnswers[index] === textQ.correctAnswer,
+            question: textQ.text || '',
+            correctAnswer: textQ.correctAnswer
+          };
+        }
+
+        // Para otros tipos de preguntas
+        return {
+          ...baseAnswer,
+          isCorrect: false,
+          question: 'Pregunta sin tipo definido',
+          correctAnswer: -1
+        };
+      });
       
       // Guardar el resultado
-      await addDoc(collection(db, 'testResults'), {
+      const testResult = {
         userId: currentUser.uid,
         testId: test.id,
-        score,
+        score: Math.round(score * 100) / 100,
         completedAt: new Date(),
         timeSpent,
         answers,
         questionsAnswered: test.questions.length
-      });
+      };
+
+      await addDoc(collection(db, 'testResults'), testResult);
 
       // Agrupar respuestas por bloque y calcular porcentajes
       const blockResults = answers.reduce((acc: { [key: string]: { correct: number, total: number } }, answer) => {
-        if (!acc[answer.blockName]) {
-          acc[answer.blockName] = { correct: 0, total: 0 };
+        const blockName = answer.blockName || 'Sin bloque';
+        if (!acc[blockName]) {
+          acc[blockName] = { correct: 0, total: 0 };
         }
-        acc[answer.blockName].total++;
-        if (answer.isCorrect) acc[answer.blockName].correct++;
+        acc[blockName].total++;
+        if (answer.isCorrect) acc[blockName].correct++;
         return acc;
       }, {});
 
       // Generar recomendaciones por bloque
       const recommendations = Object.entries(blockResults).map(([blockName, results]) => {
         const percentage = (results.correct / results.total) * 100;
-        const timeSpent = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
         const blockRecommendation = getBlockRecommendation(blockName, percentage, timeSpent);
         return {
           blockName,
+          percentage: Math.round(percentage * 100) / 100,
           ...blockRecommendation
         };
       });

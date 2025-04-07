@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
-import { auth } from '../../firebase/firebaseConfig';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { GraduationCap, Eye, EyeOff, Copy } from 'lucide-react';
+import { GraduationCap, Eye, EyeOff } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const Register = () => {
   const [email, setEmail] = useState('');
@@ -14,6 +13,7 @@ const Register = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { register } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,24 +30,19 @@ const Register = () => {
 
     try {
       setLoading(true);
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Actualizar el perfil del usuario con el nombre de usuario
-      await updateProfile(userCredential.user, {
-        displayName: username
-      });
-
-      await sendEmailVerification(userCredential.user);
-      toast.success('¡Cuenta creada con éxito!');
-      navigate('/verify-email');
+      await register(email, password, username);
+      toast.success('¡Cuenta creada con éxito! Por favor, verifica tu correo electrónico.');
+      navigate('/login');
     } catch (error: any) {
       console.error('Error al registrar:', error);
       if (error.code === 'auth/email-already-in-use') {
-        toast.error('Este correo ya está registrado');
+        toast.error('Este correo ya está registrado. Por favor, inicia sesión o usa otro correo.');
       } else if (error.code === 'auth/weak-password') {
         toast.error('La contraseña debe tener al menos 6 caracteres');
+      } else if (error.code === 'auth/invalid-email') {
+        toast.error('El correo electrónico no es válido');
       } else {
-        toast.error('Error al crear la cuenta');
+        toast.error('Error al crear la cuenta. Por favor, intenta de nuevo más tarde.');
       }
     } finally {
       setLoading(false);

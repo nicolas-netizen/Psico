@@ -6,6 +6,7 @@ import {
   signOut as firebaseSignOut,
   sendEmailVerification,
   sendPasswordResetEmail,
+  updateProfile,
   User as FirebaseUser,
   ActionCodeSettings
 } from 'firebase/auth';
@@ -34,7 +35,7 @@ interface AuthContextType {
   currentUser: FirebaseUser | null;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, username?: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
@@ -102,13 +103,19 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     }
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string, username?: string) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       if (userCredential.user) {
+        if (username) {
+          await updateProfile(userCredential.user, {
+            displayName: username
+          });
+        }
         await sendEmailVerification(userCredential.user, actionCodeSettings);
         await setDoc(doc(db, 'users', userCredential.user.uid), {
           email,
+          displayName: username || '',
           role: 'user',
           createdAt: serverTimestamp()
         });

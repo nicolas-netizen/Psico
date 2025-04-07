@@ -79,11 +79,11 @@ const SolveTest = () => {
 
   useEffect(() => {
     if (test?.questions && test.questions.length > 0) {
-      // Obtener el tiempo límite del bloque actual
-      const currentBlockTime = test.questions[currentQuestionIndex].blockTimeLimit || 15; // Default 15 minutos si no está especificado
-      setBlockTimeLeft(currentBlockTime * 60); // Convertir a segundos
-      // Iniciar el tiempo del nuevo bloque
-      setBlockTimeLeft(currentBlockTime * 60);
+      // Solo iniciar el temporizador cuando cambia el bloque
+      if (showBlockIntro) {
+        const currentBlockTime = test.questions[currentQuestionIndex].blockTimeLimit || 15;
+        setBlockTimeLeft(currentBlockTime * 60);
+      }
 
       const timer = setInterval(() => {
         setBlockTimeLeft(prev => {
@@ -106,7 +106,7 @@ const SolveTest = () => {
 
       return () => clearInterval(timer);
     }
-  }, [currentQuestionIndex, test]);
+  }, [test, showBlockIntro]);
 
   useEffect(() => {
     const state = location.state as { blocks?: { type: string; count: number; timeLimit: number }[] };
@@ -222,23 +222,24 @@ const SolveTest = () => {
   const nextQuestion = () => {
     if (test && currentQuestionIndex < test.questions.length - 1) {
       const nextIndex = currentQuestionIndex + 1;
-      
-      // Verificar si el siguiente bloque es diferente
-      if (test.questions[nextIndex].blockName !== test.questions[currentQuestionIndex].blockName) {
+      const currentBlockName = test.questions[currentQuestionIndex].blockName;
+      const nextBlockName = test.questions[nextIndex].blockName;
+      const isNewBlock = nextBlockName !== currentBlockName;
+
+      if (isNewBlock) {
         setShowBlockIntro(true);
-        setCurrentBlock(test.questions[nextIndex].blockName);
-        // Reiniciar el tiempo para el nuevo bloque
+        setCurrentBlock(nextBlockName);
         const newBlockTimeLimit = test.questions[nextIndex].blockTimeLimit || 15;
         setBlockTimeLeft(newBlockTimeLimit * 60);
       }
+
+      setCurrentQuestionIndex(nextIndex);
 
       // Manejar preguntas de memoria
       if (test.questions[nextIndex].type === 'Memoria') {
         setShowingMemoryImages(true);
         setMemoryTimer((test.questions[nextIndex] as MemoryQuestion).memorizeTime || 10);
       }
-
-      setCurrentQuestionIndex(nextIndex);
     }
   };
 
@@ -839,12 +840,14 @@ const SolveTest = () => {
                             key={index}
                             onClick={() => {
                               const targetQuestion = test?.questions[index];
-                              if (targetQuestion.blockName !== currentBlock) {
+                              const isNewBlock = targetQuestion.blockName !== currentBlock;
+
+                              if (isNewBlock) {
                                 // Si es un bloque diferente, mostrar modal
                                 setPendingBlockChange({ index, blockName: targetQuestion.blockName });
                                 setShowBlockChangeModal(true);
                               } else {
-                                // Si es el mismo bloque, cambiar directamente
+                                // Si es el mismo bloque, cambiar directamente sin resetear tiempo
                                 setCurrentQuestionIndex(index);
                               }
                             }}

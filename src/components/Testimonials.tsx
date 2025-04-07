@@ -1,28 +1,26 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import FadeInView from './animations/FadeInView';
+import { getDefaultProfileImage } from '../utils/defaultImages';
 
 const Testimonials = () => {
   const testimonials = [
     {
       name: 'Ana García',
       role: 'Policía Nacional',
-      image: '/images/testimonials/ana.jpg',
       content: 'La preparación fue clave para mi éxito. Los simulacros y el material específico me ayudaron a dominar cada tipo de prueba psicotécnica.',
       rating: 5
     },
     {
       name: 'Carlos Martínez',
       role: 'Guardia Civil',
-      image: '/images/testimonials/carlos.jpg',
       content: 'El seguimiento personalizado y los tests adaptados a mi nivel me permitieron mejorar constantemente. Totalmente recomendado.',
       rating: 5
     },
     {
       name: 'Laura Sánchez',
       role: 'Bombero',
-      image: '/images/testimonials/laura.jpg',
       content: 'La plataforma es intuitiva y el método de estudio es muy efectivo. Los tutores siempre están disponibles para resolver dudas.',
       rating: 5
     }
@@ -64,7 +62,11 @@ const Testimonials = () => {
             >
               <div className="flex flex-col md:flex-row items-center gap-8">
                 <div className="w-32 h-32 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
-                  {/* Image placeholder */}
+                  <img 
+                    src={getDefaultProfileImage(testimonials[currentIndex].name[0])} 
+                    alt={testimonials[currentIndex].name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div>
                   <div className="flex mb-4">

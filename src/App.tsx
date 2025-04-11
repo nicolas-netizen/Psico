@@ -28,6 +28,12 @@ import SolveTest from './components/SolveTest';
 import PlansPage from './pages/PlansPage';
 import TestReview from './components/TestReview';
 import AdminReports from './pages/AdminReports';
+import Contact from './pages/Contact';
+
+// Páginas legales
+import TermsOfService from './pages/legal/TermsOfService';
+import PrivacyPolicy from './pages/legal/PrivacyPolicy';
+import CookiesPolicy from './pages/legal/CookiesPolicy';
 
 // Rutas protegidas
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
@@ -228,6 +234,40 @@ function App() {
                   <PrivateRoute>
                     <CustomTestCreator />
                   </PrivateRoute>
+                </Layout>
+              }
+            />
+
+            {/* Rutas legales */}
+            <Route 
+              path="/legal/terminos" 
+              element={
+                <Layout>
+                  <TermsOfService />
+                </Layout>
+              }
+            />
+            <Route 
+              path="/legal/privacidad" 
+              element={
+                <Layout>
+                  <PrivacyPolicy />
+                </Layout>
+              }
+            />
+            <Route 
+              path="/legal/cookies" 
+              element={
+                <Layout>
+                  <CookiesPolicy />
+                </Layout>
+              }
+            />
+            <Route 
+              path="/contacto" 
+              element={
+                <Layout>
+                  <Contact />
                 </Layout>
               }
             />

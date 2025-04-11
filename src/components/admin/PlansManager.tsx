@@ -9,6 +9,7 @@ interface PlanFormData {
   features: string[];
   isFeatured: boolean;
   customTestsEnabled: boolean;
+  duration: number;
 }
 
 const PlansManager: React.FC = () => {
@@ -22,6 +23,7 @@ const PlansManager: React.FC = () => {
     features: [''],
     isFeatured: false,
     customTestsEnabled: false,
+    duration: 30,
   });
 
   useEffect(() => {
@@ -79,6 +81,7 @@ const PlansManager: React.FC = () => {
       features: [''],
       isFeatured: false,
       customTestsEnabled: false,
+      duration: 30,
     });
     setEditingPlan(null);
   };
@@ -116,15 +119,29 @@ const PlansManager: React.FC = () => {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Precio</label>
-          <input
-            type="number"
-            value={formData.price}
-            onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            required
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Precio</label>
+            <input
+              type="number"
+              value={formData.price}
+              onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Duración (días)</label>
+            <input
+              type="number"
+              value={formData.duration}
+              onChange={(e) => setFormData({ ...formData, duration: Number(e.target.value) })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              min={1}
+              required
+            />
+          </div>
         </div>
 
         <div>
@@ -212,6 +229,7 @@ const PlansManager: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900">{plan.name}</h3>
                 <p className="mt-1 text-gray-500">{plan.description}</p>
                 <p className="mt-2 text-2xl font-bold text-gray-900">${plan.price}</p>
+                <p className="mt-1 text-sm text-gray-500">Duración: {plan.duration} días</p>
                 {plan.hasCustomTest && (
                   <span className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                     Test Personalizado
@@ -239,6 +257,7 @@ const PlansManager: React.FC = () => {
                       features: plan.features,
                       isFeatured: plan.isFeatured || false,
                       customTestsEnabled: plan.hasCustomTest || false,
+                      duration: plan.duration || 30,
                     });
                   }}
                   className="text-indigo-600 hover:text-indigo-900"

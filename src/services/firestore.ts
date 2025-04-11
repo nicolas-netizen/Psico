@@ -26,6 +26,7 @@ export interface Plan {
   isFeatured?: boolean;
   hasCustomTest?: boolean;
   customTestsEnabled?: boolean;
+  duration: number; // duración en días
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -232,6 +233,7 @@ export const getFreePlan = async (): Promise<Plan | null> => {
         ],
         hasCustomTest: false,
         isFeatured: false,
+        duration: 30,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       };
@@ -956,16 +958,16 @@ export const createInitialPlans = async () => {
         name: 'Plan Básico',
         description: 'Ideal para comenzar tu preparación',
         price: 1999,
-        duration: 30, // días
+        duration: 30,
         features: [
           'Acceso a tests básicos',
           'Estadísticas de rendimiento',
-          'Soporte por email',
-          'Validez por 30 días'
+          'Soporte por email'
         ],
         isFeatured: false,
         customTestsEnabled: false,
-        createdAt: Timestamp.now()
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       });
 
       // Plan Profesional
@@ -973,18 +975,18 @@ export const createInitialPlans = async () => {
         name: 'Plan Profesional',
         description: 'La mejor opción para profesionales',
         price: 3999,
-        duration: 90, // días
+        duration: 90,
         features: [
           'Acceso a todos los tests',
           'Tests personalizados ilimitados',
           'Estadísticas avanzadas',
           'Soporte prioritario',
-          'Validez por 90 días',
           'Recursos descargables'
         ],
         isFeatured: true,
         customTestsEnabled: true,
-        createdAt: Timestamp.now()
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       });
 
       // Plan Premium
@@ -992,17 +994,17 @@ export const createInitialPlans = async () => {
         name: 'Plan Premium',
         description: 'Preparación completa y personalizada',
         price: 5999,
-        duration: 180, // días
+        duration: 180,
         features: [
           'Todo lo incluido en el Plan Profesional',
           'Sesiones de mentoría personal',
           'Contenido exclusivo',
-          'Validez por 180 días',
           'Garantía de satisfacción'
         ],
-        isFeatured: false,
+        isFeatured: true,
         customTestsEnabled: true,
-        createdAt: Timestamp.now()
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       });
 
       console.log('Planes iniciales creados exitosamente');

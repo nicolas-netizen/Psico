@@ -129,12 +129,21 @@ const PlansPage = () => {
               <div className="p-8">
                 <h3 className="text-2xl font-bold text-gray-900 mb-4">{plan.name}</h3>
                 <p className="text-gray-600 mb-6">{plan.description}</p>
-                
-                <div className="mb-8">
-                  <span className="text-4xl font-bold text-gray-900">
-                    {formatPrice(plan.price)}
-                  </span>
-                  <span className="text-gray-500 ml-2">/mes</span>
+                <div className="mt-8 space-y-4">
+                  <div className="flex items-baseline justify-center">
+                    <span className="text-5xl font-bold text-gray-900">
+                      {formatPrice(plan.price)}
+                    </span>
+                    <span className="ml-2 text-lg text-gray-600"></span>
+                  </div>
+                  <div className="flex items-center justify-center space-x-2 text-[#91c26a]">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm font-medium">
+                      Duración: {plan.duration} días
+                    </span>
+                  </div>
                 </div>
 
                 <ul className="space-y-4 mb-8">

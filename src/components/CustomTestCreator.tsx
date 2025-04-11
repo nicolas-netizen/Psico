@@ -84,7 +84,7 @@ const CustomTestCreator = () => {
   const handleQuantityChange = (blockName: BlockType, increment: boolean) => {
     setSelectedBlocks(prev => prev.map(block => {
       if (block.blockName === blockName) {
-        const newQuantity = increment ? block.quantity + 1 : Math.max(0, block.quantity - 1);
+        const newQuantity = increment ? Math.min(15, block.quantity + 1) : Math.max(0, block.quantity - 1);
         return { ...block, quantity: newQuantity };
       }
       return block;
@@ -226,6 +226,7 @@ const CustomTestCreator = () => {
                   </h3>
                   <p className="text-sm text-gray-500">
                     {availableQuestions} preguntas disponibles
+                    <span className="block text-xs text-gray-400">[Máx. 15 preguntas]</span>
                   </p>
                 </div>
               </div>
@@ -245,7 +246,7 @@ const CustomTestCreator = () => {
                     <button
                       onClick={() => handleQuantityChange(block.blockName, true)}
                       className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100"
-                      disabled={block.quantity >= availableQuestions}
+                      disabled={block.quantity >= Math.min(15, availableQuestions)}
                     >
                       +
                     </button>

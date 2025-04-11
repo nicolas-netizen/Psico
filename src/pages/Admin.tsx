@@ -2,12 +2,10 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import AdminDashboard from '../components/admin/Dashboard';
-import TestManager from '../components/admin/TestManager';
 import PlansManager from '../components/admin/PlansManager';
 import QuestionManager from '../components/admin/QuestionManager';
 import DiscountCodeManager from '../components/admin/DiscountCodeManager';
 import BaremoAdmin from './admin/BaremoAdmin';
-import TestGenerator from '../components/admin/TestGenerator';
 import { LogOut } from 'lucide-react';
 
 const Admin: React.FC = () => {
@@ -32,8 +30,6 @@ const Admin: React.FC = () => {
     switch (activeTab) {
       case 'dashboard':
         return <AdminDashboard />;
-      case 'tests':
-        return <TestManager />;
       case 'questions':
         return <QuestionManager />;
       case 'plans':
@@ -42,8 +38,6 @@ const Admin: React.FC = () => {
         return <DiscountCodeManager />;
       case 'baremos':
         return <BaremoAdmin />;
-      case 'testGenerator':
-        return <TestGenerator />;
       default:
         return <AdminDashboard />;
     }
@@ -83,16 +77,6 @@ const Admin: React.FC = () => {
                 Dashboard
               </button>
               <button
-                onClick={() => setActiveTab('tests')}
-                className={`${
-                  activeTab === 'tests'
-                    ? 'border-[#91c26a] text-[#91c26a]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
-              >
-                Tests
-              </button>
-              <button
                 onClick={() => setActiveTab('questions')}
                 className={`${
                   activeTab === 'questions'
@@ -101,16 +85,6 @@ const Admin: React.FC = () => {
                 } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
               >
                 Preguntas
-              </button>
-              <button
-                onClick={() => setActiveTab('testGenerator')}
-                className={`${
-                  activeTab === 'testGenerator'
-                    ? 'border-[#91c26a] text-[#91c26a]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                } whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm`}
-              >
-                Generador de Tests
               </button>
               <button
                 onClick={() => setActiveTab('plans')}

@@ -21,29 +21,11 @@ import {
   Brain,
   Clock,
   Trophy,
-  ChevronRight,
   Plus,
   Calendar,
-  Settings,
   AlertCircle
 } from 'lucide-react';
 
-interface Test {
-  id: string;
-  title: string;
-  description: string;
-  timeLimit: number;
-  isPublic: boolean;
-  customSettings?: {
-    imagesPerBlock: number;
-    blocks: number;
-    memorizeTime: number;
-    distractionTime: number;
-  };
-  type?: string;
-  userId?: string;
-  createdAt?: any;
-}
 
 interface TestResult {
   id: string;
@@ -111,7 +93,6 @@ const Dashboard: React.FC = () => {
     customTestsEnabled?: boolean;
   } | null>(null);
   const [daysLeft, setDaysLeft] = useState<number>(0);
-  const [availableTests, setAvailableTests] = useState<Test[]>([]);
   const [userResults, setUserResults] = useState<TestResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
@@ -191,23 +172,6 @@ const Dashboard: React.FC = () => {
         }
 
         try {
-          // Cargar tests disponibles
-          const testsQuery = query(
-            collection(db, 'tests'),
-            where('isPublic', '==', true)
-          );
-          const testsSnapshot = await getDocs(testsQuery);
-          const testsData = testsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as Test[];
-          setAvailableTests(testsData);
-        } catch (error) {
-          console.error('Error al cargar los tests:', error);
-          toast.error('Error al cargar los tests disponibles');
-        }
-
-        try {
           // Primero intentamos obtener solo los resultados filtrados por userId
           const resultsQuery = query(
             collection(db, 'testResults'),
@@ -258,11 +222,9 @@ const Dashboard: React.FC = () => {
 
           // Calcular distribución de categorías
           const categoryStats = resultsData
-            .filter(result => result.score != null)
-            .reduce((acc: any, result) => {
-              const score = Number(result.score) || 0;
-              const category = score >= 80 ? 'Memoria' :
-                             score >= 60 ? 'Secuencia' : 'Texto';
+            .flatMap(result => result.answers || [])
+            .reduce((acc: any, answer) => {
+              const category = answer.blockName || 'Sin bloque';
               acc[category] = (acc[category] || 0) + 1;
               return acc;
             }, {});
@@ -315,9 +277,7 @@ const Dashboard: React.FC = () => {
         isPublic: customTest.isPublic
       };
 
-      const testRef = await addDoc(collection(db, 'tests'), newTest);
-      const testWithId = { id: testRef.id, ...newTest };
-      
+      await addDoc(collection(db, 'tests'), newTest);
       toast.success('Test creado exitosamente');
       setShowCustomizeModal(false);
       setCustomTest({
@@ -330,8 +290,6 @@ const Dashboard: React.FC = () => {
         isPublic: false
       });
 
-      // Actualizar la lista de tests disponibles
-      setAvailableTests(prev => [...prev, testWithId]);
     } catch (error) {
       console.error('Error creating custom test:', error);
       toast.error('Error al crear el test personalizado');
@@ -340,9 +298,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleStartTest = (testId: string) => {
-    navigate(`/test/${testId}`);
-  };
 
   const addBlock = () => {
     setCustomTest(prev => ({
@@ -724,47 +679,6 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Tests Disponibles */}
-      <div className="mb-12">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Tests Disponibles</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {availableTests.map((test) => (
-            <div
-              key={test.id}
-              className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">{test.title}</h3>
-                  <p className="mt-1 text-sm text-gray-500">{test.description}</p>
-                </div>
-                {test.customSettings ? (
-                  <Settings className="w-6 h-6 text-[#91c26a]" />
-                ) : (
-                  <Brain className="w-6 h-6 text-[#91c26a]" />
-                )}
-              </div>
-              <div className="mt-4 flex items-center text-sm text-gray-500">
-                <Clock className="w-4 h-4 mr-1" />
-                <span>{test.timeLimit} minutos</span>
-              </div>
-              {test.customSettings && (
-                <div className="mt-2 text-sm text-gray-500">
-                  <div>Bloques: {test.customSettings.blocks}</div>
-                  <div>Imágenes por bloque: {test.customSettings.imagesPerBlock}</div>
-                </div>
-              )}
-              <button
-                onClick={() => handleStartTest(test.id)}
-                className="mt-4 w-full flex items-center justify-center px-4 py-2 border border-[#91c26a] text-[#91c26a] rounded-lg hover:bg-[#f0f7eb] transition-colors"
-              >
-                Comenzar Test
-                <ChevronRight className="w-4 h-4 ml-2" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Modal de Personalización */}
       {showCustomizeModal && (

@@ -9,7 +9,7 @@ import { getOptimizedImageUrl } from '../utils/imageUtils';
 
 interface BaseQuestion {
   id: string;
-  type: 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia' | 'TextoImagen';
+  type: 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia' | 'TextoImagen' | 'MemoriaDistractor';
   blockType: string;
   blockName: string;
   blockTimeLimit?: number; // Tiempo límite en minutos para el bloque
@@ -31,7 +31,27 @@ interface MemoryQuestion extends BaseQuestion {
   shuffledOrder?: string[]; // orden aleatorio de las imágenes para la selección
 }
 
-type Question = TextQuestion | MemoryQuestion;
+interface MemoryDistractorQuestion extends BaseQuestion {
+  type: 'MemoriaDistractor';
+  images: string[];
+  correctImageIndex: number;
+  memoryTime?: number; // tiempo en segundos para memorizar la imagen (por defecto 6)
+  distractor: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+  };
+  realQuestion: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+  };
+  // Estados internos para controlar el flujo
+  _currentStep?: 'memorize' | 'distractor' | 'real';
+  _distractorAnswered?: boolean;
+}
+
+type Question = TextQuestion | MemoryQuestion | MemoryDistractorQuestion;
 
 interface Test {
   id: string;
@@ -59,6 +79,11 @@ const SolveTest = () => {
   const [testResult, setTestResult] = useState<{score: number, answers: any[], recommendations: { blockName: string, tips: string[], exercises: string[], resources: string[] }[]}>(); 
   const [showBlockIntro, setShowBlockIntro] = useState(true);
   const [currentBlock, setCurrentBlock] = useState<string>('');
+  
+  // Estados para preguntas de memoria con distractor
+  const [memoryTimer, setMemoryTimer] = useState<number | null>(null);
+  const [currentMemoryStep, setCurrentMemoryStep] = useState<'memorize' | 'distractor' | 'real' | null>(null);
+  const [distractorAnswered, setDistractorAnswered] = useState(false);
 
   // Obtener la pregunta actual y las preguntas del bloque actual
   const currentQuestion = test?.questions[currentQuestionIndex];
@@ -204,9 +229,14 @@ const SolveTest = () => {
   };
 
   const handleAnswerSelection = (answerIndex: number) => {
-    const newAnswers = [...selectedAnswers];
-    newAnswers[currentQuestionIndex] = answerIndex;
-    setSelectedAnswers(newAnswers);
+    const newSelectedAnswers = [...selectedAnswers];
+    newSelectedAnswers[currentQuestionIndex] = answerIndex;
+    setSelectedAnswers(newSelectedAnswers);
+    
+    // Si estamos en una pregunta de memoria con distractor y en el paso de distracción
+    if (currentQuestion?.type === 'MemoriaDistractor' && currentMemoryStep === 'distractor') {
+      setDistractorAnswered(true);
+    }
   };
 
   // Función para encontrar el índice de la primera pregunta del siguiente bloque
@@ -223,48 +253,90 @@ const SolveTest = () => {
   const nextQuestion = () => {
     if (!test) return;
 
-    const currentBlockIndex = currentBlockQuestions.findIndex(q => 
-      test.questions.indexOf(q) === currentQuestionIndex
-    );
-
-    if (currentBlockIndex < currentBlockQuestions.length - 1) {
-      // Siguiente pregunta en el mismo bloque
-      const nextQuestionIndex = test.questions.indexOf(currentBlockQuestions[currentBlockIndex + 1]);
-      setCurrentQuestionIndex(nextQuestionIndex);
-
-      // Manejar preguntas de memoria
-      const nextQuestion = currentBlockQuestions[currentBlockIndex + 1];
-      if (nextQuestion.type === 'Memoria') {
-        setShowingMemoryImages(true);
-      }
-    } else {
-      // Fin del bloque actual, buscar siguiente bloque
-      const blocks = [...new Set(test.questions.map(q => q.blockName))];
-      const currentBlockPosition = blocks.indexOf(currentBlock);
+    // Manejo de preguntas de memoria con distractor
+    if (currentQuestion?.type === 'MemoriaDistractor') {
+      const memoryQuestion = currentQuestion as MemoryDistractorQuestion;
       
-      if (currentBlockPosition < blocks.length - 1) {
-        // Hay más bloques
-        const nextBlockName = blocks[currentBlockPosition + 1];
-        const nextBlockQuestions = test.questions.filter(q => q.blockName === nextBlockName);
+      // Si estamos en el paso de memorización y no hemos mostrado la imagen aún
+      if (currentMemoryStep === 'memorize' || currentMemoryStep === null) {
+        setCurrentMemoryStep('memorize');
+        setShowingMemoryImages(true);
         
-        setNextBlockName(nextBlockName);
-        setTimeout(() => setNextBlockName(''), 3000);
-        setShowBlockIntro(true);
-        setCurrentBlock(nextBlockName);
-        setCurrentQuestionIndex(test.questions.indexOf(nextBlockQuestions[0]));
+        // Mostrar imagen por el tiempo especificado (o 6 segundos por defecto)
+        const memorizeTime = memoryQuestion.memoryTime || 6;
+        setMemoryTimer(memorizeTime);
         
-        const newBlockTimeLimit = nextBlockQuestions[0].blockTimeLimit || 15;
-        setBlockTimeLeft(newBlockTimeLimit * 60);
-      } else {
-        // No hay más bloques, finalizar test
-        handleSubmit();
+        const timer = setInterval(() => {
+          setMemoryTimer(prev => {
+            if (prev === null || prev <= 1) {
+              clearInterval(timer);
+              setShowingMemoryImages(false);
+              setCurrentMemoryStep('distractor');
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        
+        return;
+      }
+      
+      // Si estamos en el paso de distracción
+      if (currentMemoryStep === 'distractor') {
+        // Solo permitir avanzar si se ha respondido a la pregunta de distracción
+        if (!distractorAnswered) {
+          toast.warning('Debes responder a la pregunta de distracción para continuar');
+          return;
+        }
+        
+        // Pasar al paso de la pregunta real
+        setCurrentMemoryStep('real');
+        return;
+      }
+      
+      // Si estamos en el paso de la pregunta real, pasar a la siguiente pregunta
+      if (currentMemoryStep === 'real') {
+        // Resetear el estado para la próxima pregunta de memoria
+        setCurrentMemoryStep(null);
+        setDistractorAnswered(false);
+        setMemoryTimer(null);
       }
     }
-  };
+    
+    // Manejo de preguntas de memoria estándar
+    else if (currentQuestion?.type === 'Memoria' && !showingMemoryImages) {
+      setShowingMemoryImages(true);
+      
+      // Mostrar imágenes por el tiempo especificado (o 5 segundos por defecto)
+      const memorizeTime = (currentQuestion as MemoryQuestion).memorizeTime || 5;
+      setTimeout(() => {
+        setShowingMemoryImages(false);
+      }, memorizeTime * 1000);
+      
+      return;
+    }
 
-  const previousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1);
+    // Si estamos en la última pregunta del bloque actual
+    const isLastQuestionInBlock = currentBlockQuestions.indexOf(currentQuestion as Question) === currentBlockQuestions.length - 1;
+    
+    if (isLastQuestionInBlock) {
+      // Buscar el índice de la primera pregunta del siguiente bloque
+      const nextBlockIndex = findNextBlockStartIndex(currentQuestionIndex, test.questions);
+      
+      if (nextBlockIndex !== -1) {
+        // Hay un siguiente bloque
+        const nextBlockName = test.questions[nextBlockIndex].blockName;
+        setNextBlockName(nextBlockName);
+        setCurrentBlock(nextBlockName);
+        setCurrentQuestionIndex(nextBlockIndex);
+        setShowBlockIntro(true);
+      } else {
+        // No hay más bloques, finalizar el test
+        handleSubmit();
+      }
+    } else {
+      // Pasar a la siguiente pregunta dentro del mismo bloque
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
     }
   };
 
@@ -370,22 +442,46 @@ const SolveTest = () => {
   };
 
   const calculateScore = () => {
-    if (!test) return 0;
-    
-    let correctAnswers = 0;
-    test.questions.forEach((question, index) => {
-      if (question.type === 'Memoria') {
-        if (selectedAnswers[index] === question.correctImageIndex) {
-          correctAnswers++;
-        }
-      } else {
-        if (selectedAnswers[index] === question.correctAnswer) {
-          correctAnswers++;
-        }
+    if (!test) return { score: 0, answers: [] };
+
+    let correctCount = 0;
+    let totalQuestions = 0;
+    const answers = [];
+
+    for (let i = 0; i < test.questions.length; i++) {
+      const question = test.questions[i];
+      const selectedAnswer = selectedAnswers[i];
+      let isCorrect = false;
+      let shouldCount = true; // Determina si la pregunta cuenta para el puntaje
+
+      if (question.type === 'Texto' || question.type === 'TextoImagen') {
+        isCorrect = selectedAnswer === (question as TextQuestion).correctAnswer;
+      } else if (question.type === 'MemoriaDistractor') {
+        // Para preguntas de memoria con distractor, solo evaluamos la respuesta real
+        // La pregunta de distracción no cuenta para el puntaje
+        const memoryQuestion = question as MemoryDistractorQuestion;
+        
+        // Verificamos si la respuesta seleccionada coincide con la respuesta correcta de la pregunta real
+        // Nota: Asumimos que el índice de la respuesta seleccionada corresponde a la pregunta real
+        isCorrect = selectedAnswer === memoryQuestion.realQuestion.correctAnswer;
+        
+        // La pregunta de distracción no cuenta para el puntaje total
+        shouldCount = true;
       }
-    });
-    
-    return (correctAnswers / test.questions.length) * 100;
+
+      if (isCorrect && shouldCount) correctCount++;
+      if (shouldCount) totalQuestions++;
+
+      answers.push({
+        questionId: question.id,
+        selectedAnswer,
+        isCorrect,
+        shouldCount
+      });
+    }
+
+    const score = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+    return { score, answers };
   };
 
   const handleSubmit = async () => {
@@ -426,6 +522,14 @@ const SolveTest = () => {
             question: textQ.text || '',
             correctAnswer: textQ.correctAnswer
           };
+        } else if (question.type === 'MemoriaDistractor') {
+          const memoryDistractorQ = question as MemoryDistractorQuestion;
+          return {
+            ...baseAnswer,
+            isCorrect: selectedAnswers[index] === memoryDistractorQ.realQuestion.correctAnswer,
+            question: memoryDistractorQ.realQuestion.question,
+            correctAnswer: memoryDistractorQ.realQuestion.correctAnswer
+          };
         }
 
         // Para otros tipos de preguntas
@@ -441,7 +545,7 @@ const SolveTest = () => {
       const testResult = {
         userId: currentUser.uid,
         testId: test.id,
-        score: Math.round(score * 100) / 100,
+        score: Math.round(score.score * 100) / 100,
         completedAt: new Date(),
         timeSpent,
         answers,
@@ -472,7 +576,7 @@ const SolveTest = () => {
         };
       });
 
-      setTestResult({ score, answers, recommendations });
+      setTestResult({ score: score.score, answers: score.answers, recommendations });
       setIsTestFinished(true);
       toast.success('Test completado con éxito');
     } catch (error) {
@@ -486,134 +590,170 @@ const SolveTest = () => {
   const renderQuestion = () => {
     if (!currentQuestion) return null;
 
-    if (currentQuestion.type === 'Memoria') {
-      const memoryQuestion = currentQuestion as MemoryQuestion;
-      const shuffledImages = [...memoryQuestion.images];
-
-      if (showingMemoryImages) {
-        // Durante la fase de memorización, solo mostrar la imagen correcta
-        const correctImage = memoryQuestion.images[memoryQuestion.correctImageIndex];
-        return (
-          <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl mb-4 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-base font-bold text-gray-800">
-                Memoriza la siguiente imagen
-              </h2>
-            </div>
-            <div className="flex justify-center mb-4">
+    if (currentQuestion.type === 'Texto' || currentQuestion.type === 'TextoImagen') {
+      return (
+        <div className="mb-6">
+          <h4 className="text-lg font-medium text-gray-800 mb-4">{(currentQuestion as TextQuestion).text}</h4>
+          {(currentQuestion as TextQuestion).imageUrl && (
+            <div className="mb-4">
               <img 
-                src={correctImage} 
-                alt="Imagen a memorizar"
-                className="max-w-full h-auto rounded-lg shadow-md"
-                style={{ maxHeight: '400px', objectFit: 'contain' }}
-                loading="lazy"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = 'https://via.placeholder.com/150x150?text=Error+al+cargar+imagen';
-                }}
+                src={getOptimizedImageUrl((currentQuestion as TextQuestion).imageUrl || '')} 
+                alt="Imagen de la pregunta" 
+                className="max-w-full rounded-lg mx-auto"
+                style={{ maxHeight: '300px' }}
               />
             </div>
-          </div>
-        );
-      }
-
-      // En la fase de selección, mostrar todas las opciones
-      // Asegurarse de que las imágenes estén en un orden aleatorio pero consistente
-      if (!memoryQuestion.shuffledOrder) {
-        for (let i = shuffledImages.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffledImages[i], shuffledImages[j]] = [shuffledImages[j], shuffledImages[i]];
-        }
-        memoryQuestion.shuffledOrder = shuffledImages;
-      }
-      const displayImages = memoryQuestion.shuffledOrder || shuffledImages;
-
-      return (
-        <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl mb-4 shadow-sm border border-gray-100">
-          <h2 className="text-base font-bold text-gray-800 mb-4">
-            Selecciona la imagen que viste anteriormente
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {displayImages.map((imageUrl: string, index: number) => (
-              <div key={index} className="flex justify-center">
-                <button
-                  onClick={() => handleAnswerSelection(index)}
-                  className={`border-2 rounded-lg p-2 transition-all duration-200 ${
-                    selectedAnswers[currentQuestionIndex] === index
-                      ? 'border-[#91c26a] shadow-lg scale-105'
-                      : 'border-transparent hover:border-gray-300'
-                  }`}
-                >
-                  <img
-                    src={imageUrl}
-                    alt={`Opción ${index + 1}`}
-                    className="max-w-full h-auto rounded-lg"
-                    style={{ maxHeight: '300px', objectFit: 'contain' }}
-                    loading="lazy"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'https://via.placeholder.com/150x150?text=Error+al+cargar+imagen';
-                    }}
-                  />
-                </button>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       );
     }
 
-    const textQuestion = currentQuestion as TextQuestion;
-    return (
-      <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl mb-4 shadow-sm border border-gray-100">
-        <h2 className="text-base font-bold text-gray-800 mb-4">
-          {textQuestion.text}
-        </h2>
-        {textQuestion.imageUrl && (
-          <div className="flex justify-center mb-4">
-            <img
-              src={getOptimizedImageUrl(textQuestion.imageUrl, {
-                width: 800,
-                quality: 80,
-              })}
-              alt="Imagen de la pregunta"
-              className="max-w-full h-auto rounded-lg shadow-md"
-              style={{ maxHeight: '300px' }}
-              loading="lazy"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = 'https://via.placeholder.com/150x150?text=Error+al+cargar+imagen';
-              }}
-            />
+    if (currentQuestion.type === 'Memoria') {
+      const memoryQuestion = currentQuestion as MemoryQuestion;
+      
+      if (showingMemoryImages) {
+        return (
+          <div className="mb-6">
+            <h4 className="text-lg font-medium text-gray-800 mb-4">Memoriza las siguientes imágenes</h4>
+            <div className="grid grid-cols-2 gap-4">
+              {memoryQuestion.images.map((image, index) => (
+                <div key={index} className="border rounded-lg p-2">
+                  <img 
+                    src={getOptimizedImageUrl(image)} 
+                    alt={`Imagen ${index + 1}`} 
+                    className="w-full h-48 object-contain"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
-    );
+        );
+      } else {
+        return (
+          <div className="mb-6">
+            <h4 className="text-lg font-medium text-gray-800 mb-4">Selecciona la imagen correcta</h4>
+          </div>
+        );
+      }
+    }
+    
+    if (currentQuestion.type === 'MemoriaDistractor') {
+      const memoryQuestion = currentQuestion as MemoryDistractorQuestion;
+      
+      // Paso 1: Mostrar la imagen para memorizar
+      if (currentMemoryStep === 'memorize') {
+        return (
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="text-lg font-medium text-gray-800">Memoriza la siguiente imagen</h4>
+              <div className="text-xl font-bold text-[#91c26a]">{memoryTimer}s</div>
+            </div>
+            <div className="flex justify-center">
+              {memoryQuestion.images.length > 0 && (
+                <div className="border rounded-lg p-2">
+                  <img 
+                    src={getOptimizedImageUrl(memoryQuestion.images[0])} 
+                    alt="Imagen para memorizar" 
+                    className="max-h-80 object-contain"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+      
+      // Paso 2: Mostrar la pregunta de distracción
+      if (currentMemoryStep === 'distractor') {
+        return (
+          <div className="mb-6">
+            <div className="p-3 bg-yellow-50 rounded-lg mb-4 border border-yellow-200">
+              <p className="text-sm text-yellow-700">Esta pregunta es solo de distracción y no afecta tu puntaje.</p>
+            </div>
+            <h4 className="text-lg font-medium text-gray-800 mb-4">{memoryQuestion.distractor.question}</h4>
+          </div>
+        );
+      }
+      
+      // Paso 3: Mostrar la pregunta real relacionada con la imagen
+      if (currentMemoryStep === 'real') {
+        return (
+          <div className="mb-6">
+            <div className="p-3 bg-green-50 rounded-lg mb-4 border border-green-200">
+              <p className="text-sm text-green-700">Ahora, responde esta pregunta sobre la imagen que memorizaste.</p>
+            </div>
+            <h4 className="text-lg font-medium text-gray-800 mb-4">{memoryQuestion.realQuestion.question}</h4>
+          </div>
+        );
+      }
+    }
+
+    return null;
   };
 
   const renderOptions = () => {
-    if (!test || !currentQuestion || currentQuestion.type !== 'Texto') return null;
+    if (!currentQuestion) return null;
 
-    const textQuestion = currentQuestion as TextQuestion;
-    return (
-      <div className="space-y-3">
-        {textQuestion.options.map((option: string, index: number) => (
-          <button
-            key={index}
-            onClick={() => handleAnswerSelection(index)}
-            className={`w-full p-3 text-left rounded-xl transition-all duration-200 border-2 group ${
-              selectedAnswers[currentQuestionIndex] === index
-                ? 'bg-gradient-to-r from-[#91c26a] to-[#82b35b] text-white border-transparent shadow-md'
-                : 'bg-white border-gray-200 text-gray-700 hover:border-[#91c26a]/50 hover:shadow-md hover:bg-[#91c26a]/5'
-            }`}
-          >
-            <div className="flex items-center">
-              <span className="flex-1">{option}</span>
-            </div>
-          </button>
-        ))}
-      </div>
-    );
+    if (currentQuestion.type === 'Texto' || currentQuestion.type === 'TextoImagen') {
+      return (
+        <div className="space-y-3">
+          {(currentQuestion as TextQuestion).options.map((option, index) => (
+            <button
+              key={index}
+              onClick={() => handleAnswerSelection(index)}
+              className={`w-full text-left p-3 rounded-lg transition-colors ${selectedAnswers[currentQuestionIndex] === index ? 'bg-[#91c26a]/20 border-2 border-[#91c26a]' : 'bg-white border border-gray-200 hover:border-[#91c26a]/50 hover:bg-[#91c26a]/5'}`}
+            >
+              <span className="font-medium">{String.fromCharCode(65 + index)}.</span> {option}
+            </button>
+          ))}
+        </div>
+      );
+    }
+    
+    if (currentQuestion.type === 'MemoriaDistractor') {
+      const memoryQuestion = currentQuestion as MemoryDistractorQuestion;
+      
+      // No mostrar opciones durante la memorización
+      if (currentMemoryStep === 'memorize') {
+        return null;
+      }
+      
+      // Mostrar opciones para la pregunta de distracción
+      if (currentMemoryStep === 'distractor') {
+        return (
+          <div className="space-y-3">
+            {memoryQuestion.distractor.options.map((option, index) => (
+              <button
+                key={index}
+                onClick={() => handleAnswerSelection(index)}
+                className={`w-full text-left p-3 rounded-lg transition-colors ${selectedAnswers[currentQuestionIndex] === index ? 'bg-[#91c26a]/20 border-2 border-[#91c26a]' : 'bg-white border border-gray-200 hover:border-[#91c26a]/50 hover:bg-[#91c26a]/5'}`}
+              >
+                <span className="font-medium">{String.fromCharCode(65 + index)}.</span> {option}
+              </button>
+            ))}
+          </div>
+        );
+      }
+      
+      // Mostrar opciones para la pregunta real
+      if (currentMemoryStep === 'real') {
+        return (
+          <div className="space-y-3">
+            {memoryQuestion.realQuestion.options.map((option, index) => (
+              <button
+                key={index}
+                onClick={() => handleAnswerSelection(index)}
+                className={`w-full text-left p-3 rounded-lg transition-colors ${selectedAnswers[currentQuestionIndex] === index ? 'bg-[#91c26a]/20 border-2 border-[#91c26a]' : 'bg-white border border-gray-200 hover:border-[#91c26a]/50 hover:bg-[#91c26a]/5'}`}
+              >
+                <span className="font-medium">{String.fromCharCode(65 + index)}.</span> {option}
+              </button>
+            ))}
+          </div>
+        );
+      }
+    }
+
+    return null;
   };
 
   return (
@@ -792,7 +932,7 @@ const SolveTest = () => {
                     Anterior
                   </button>
 
-                  {test && currentQuestionIndex === test.questions.length - 1 && !showingMemoryImages ? (
+                  {test && currentQuestionIndex === test.questions.length - 1 && !showingMemoryImages && currentMemoryStep !== 'memorize' && currentMemoryStep !== 'distractor' ? (
                     <button
                       onClick={handleSubmit}
                       disabled={submitting}
@@ -800,12 +940,12 @@ const SolveTest = () => {
                     >
                       {submitting ? 'Enviando...' : 'Finalizar Test'}
                     </button>
-                  ) : !showingMemoryImages ? (
+                  ) : !showingMemoryImages && currentMemoryStep !== 'memorize' ? (
                     <button
                       onClick={nextQuestion}
                       className="px-6 py-2 bg-[#91c26a] text-white rounded-lg hover:bg-[#82b35b] transition-colors"
                     >
-                      Siguiente
+                      {currentMemoryStep === 'distractor' && !distractorAnswered ? 'Responde para continuar' : 'Siguiente'}
                     </button>
                   ) : null}
                 </div>

@@ -8,7 +8,7 @@ import { TrashIcon } from 'lucide-react';
 import { CLOUDINARY_FOLDERS } from '../../utils/imageUtils';
 
 // Tipos de preguntas
-type QuestionType = 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia' | 'TextoImagen';
+type QuestionType = 'Texto' | 'Memoria' | 'Distracción' | 'Secuencia' | 'TextoImagen' | 'MemoriaDistractor';
 
 interface BaseQuestion {
   id?: string;
@@ -43,6 +43,25 @@ interface MemoryQuestion extends QuestionData {
   text?: string;
   images: string[];
   correctImageIndex: number;
+  memoryTime?: number; // Tiempo en segundos para memorizar la imagen
+}
+
+interface MemoryDistractorQuestion extends QuestionData {
+  type: 'MemoriaDistractor';
+  text?: string;
+  images: string[];
+  correctImageIndex: number;
+  memoryTime?: number; // Tiempo en segundos para memorizar la imagen (por defecto 6)
+  distractor: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+  };
+  realQuestion: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+  };
 }
 
 interface DistractionQuestion extends QuestionData {
@@ -89,6 +108,10 @@ const QuestionManager: FC = () => {
     return question.type === 'Memoria';
   };
 
+  const isMemoryDistractorQuestion = (question: QuestionData): question is MemoryDistractorQuestion => {
+    return question.type === 'MemoriaDistractor';
+  };
+
   const isSequenceQuestion = (question: QuestionData): question is SequenceQuestion => {
     return question.type === 'Secuencia';
   };
@@ -132,6 +155,28 @@ const QuestionManager: FC = () => {
         blockName: BLOCK_NAMES[selectedBlockType],
         images: [],
         correctImageIndex: 0,
+        memoryTime: 6, // Por defecto 6 segundos
+        isPublic: true,
+        createdAt: new Date()
+      };
+    } else if (type === 'MemoriaDistractor') {
+      newState = {
+        type: 'MemoriaDistractor',
+        blockType: selectedBlockType,
+        blockName: BLOCK_NAMES[selectedBlockType],
+        images: [],
+        correctImageIndex: 0,
+        memoryTime: 6, // Por defecto 6 segundos
+        distractor: {
+          question: '',
+          options: ['', '', '', ''],
+          correctAnswer: 0
+        },
+        realQuestion: {
+          question: '',
+          options: ['', '', '', ''],
+          correctAnswer: 0
+        },
         isPublic: true,
         createdAt: new Date()
       };
@@ -190,6 +235,27 @@ const QuestionManager: FC = () => {
       } else if (isMemoryQuestion(newQuestion)) {
         if (!newQuestion.images || newQuestion.images.length < 2) {
           toast.error('Debe haber al menos 2 imágenes');
+          return;
+        }
+      } else if (isMemoryDistractorQuestion(newQuestion)) {
+        if (!newQuestion.images || newQuestion.images.length === 0) {
+          toast.error('Debe incluir al menos una imagen para memorizar');
+          return;
+        }
+        if (!newQuestion.distractor.question || newQuestion.distractor.question.trim() === '') {
+          toast.error('La pregunta de distracción debe tener un texto');
+          return;
+        }
+        if (!newQuestion.distractor.options || newQuestion.distractor.options.some(opt => opt.trim() === '')) {
+          toast.error('Todas las opciones de la pregunta de distracción deben estar completas');
+          return;
+        }
+        if (!newQuestion.realQuestion.question || newQuestion.realQuestion.question.trim() === '') {
+          toast.error('La pregunta real debe tener un texto');
+          return;
+        }
+        if (!newQuestion.realQuestion.options || newQuestion.realQuestion.options.some(opt => opt.trim() === '')) {
+          toast.error('Todas las opciones de la pregunta real deben estar completas');
           return;
         }
       } else if (isSequenceQuestion(newQuestion)) {
@@ -278,7 +344,7 @@ const QuestionManager: FC = () => {
   };
 
   const handleMemoryImageUpload = (imageUrl: string) => {
-    if (!isMemoryQuestion(newQuestion)) return;
+    if (!isMemoryQuestion(newQuestion) && !isMemoryDistractorQuestion(newQuestion)) return;
     
     setNewQuestion({
       ...newQuestion,
@@ -287,7 +353,7 @@ const QuestionManager: FC = () => {
   };
 
   const handleMemoryImageDelete = (index: number) => {
-    if (!isMemoryQuestion(newQuestion)) return;
+    if (!isMemoryQuestion(newQuestion) && !isMemoryDistractorQuestion(newQuestion)) return;
     
     const newImages = [...newQuestion.images];
     newImages.splice(index, 1);
@@ -298,7 +364,7 @@ const QuestionManager: FC = () => {
   };
 
   const handleCorrectImageChange = (index: number) => {
-    if (!isMemoryQuestion(newQuestion)) return;
+    if (!isMemoryQuestion(newQuestion) && !isMemoryDistractorQuestion(newQuestion)) return;
     
     setNewQuestion({
       ...newQuestion,
@@ -316,24 +382,33 @@ const QuestionManager: FC = () => {
   };
 
   const handleTextChange = (text: string) => {
-    if (!isTextQuestion(newQuestion) && !isDistractionQuestion(newQuestion) && !isMemoryQuestion(newQuestion)) return;
+    if (!isTextQuestion(newQuestion) && !isDistractionQuestion(newQuestion) && !isMemoryQuestion(newQuestion) && !isMemoryDistractorQuestion(newQuestion)) return;
     
     setNewQuestion({
       ...newQuestion,
       text
-    } as TextQuestion | DistractionQuestion | MemoryQuestion);
+    } as TextQuestion | DistractionQuestion | MemoryQuestion | MemoryDistractorQuestion);
   };
 
   const handleCreateTestQuestion = () => {
-    const testQuestion: MemoryQuestion = {
-      type: 'Memoria',
-      text: 'Pregunta de prueba',
+    const testQuestion: MemoryDistractorQuestion = {
+      type: 'MemoriaDistractor',
+      text: 'Memoriza la siguiente imagen',
       images: [
-        'https://example.com/image1.jpg',
-        'https://example.com/image2.jpg',
-        'https://example.com/image3.jpg'
+        'https://example.com/image1.jpg'
       ],
-      correctImageIndex: 1,
+      correctImageIndex: 0,
+      memoryTime: 6, // 6 segundos para memorizar
+      distractor: {
+        question: '¿Cuál es la capital de Francia?',
+        options: ['Madrid', 'París', 'Londres', 'Berlín'],
+        correctAnswer: 1 // París
+      },
+      realQuestion: {
+        question: '¿De qué color era la taza que aparecía en la imagen?',
+        options: ['Roja', 'Azul', 'Verde', 'Amarilla'],
+        correctAnswer: 0 // Roja
+      },
       blockType: 'Memoria',
       blockName: BLOCK_NAMES.Memoria,
       isPublic: true,
@@ -341,6 +416,96 @@ const QuestionManager: FC = () => {
     };
 
     setNewQuestion(testQuestion);
+  };
+
+  // Función para manejar cambios en el tiempo de memorización
+  const handleMemoryTimeChange = (time: number) => {
+    if (!isMemoryQuestion(newQuestion) && !isMemoryDistractorQuestion(newQuestion)) return;
+    
+    setNewQuestion(prev => ({
+      ...prev,
+      memoryTime: time
+    }));
+  };
+
+  // Funciones para manejar cambios en la pregunta de distracción
+  const handleDistractorQuestionChange = (question: string) => {
+    if (!isMemoryDistractorQuestion(newQuestion)) return;
+    
+    setNewQuestion(prev => ({
+      ...prev,
+      distractor: {
+        ...prev.distractor,
+        question
+      }
+    }));
+  };
+
+  const handleDistractorOptionChange = (index: number, value: string) => {
+    if (!isMemoryDistractorQuestion(newQuestion)) return;
+    
+    const newOptions = [...newQuestion.distractor.options];
+    newOptions[index] = value;
+    
+    setNewQuestion(prev => ({
+      ...prev,
+      distractor: {
+        ...prev.distractor,
+        options: newOptions
+      }
+    }));
+  };
+
+  const handleDistractorCorrectAnswerChange = (index: number) => {
+    if (!isMemoryDistractorQuestion(newQuestion)) return;
+    
+    setNewQuestion(prev => ({
+      ...prev,
+      distractor: {
+        ...prev.distractor,
+        correctAnswer: index
+      }
+    }));
+  };
+
+  // Funciones para manejar cambios en la pregunta real
+  const handleRealQuestionChange = (question: string) => {
+    if (!isMemoryDistractorQuestion(newQuestion)) return;
+    
+    setNewQuestion(prev => ({
+      ...prev,
+      realQuestion: {
+        ...prev.realQuestion,
+        question
+      }
+    }));
+  };
+
+  const handleRealOptionChange = (index: number, value: string) => {
+    if (!isMemoryDistractorQuestion(newQuestion)) return;
+    
+    const newOptions = [...newQuestion.realQuestion.options];
+    newOptions[index] = value;
+    
+    setNewQuestion(prev => ({
+      ...prev,
+      realQuestion: {
+        ...prev.realQuestion,
+        options: newOptions
+      }
+    }));
+  };
+
+  const handleRealCorrectAnswerChange = (index: number) => {
+    if (!isMemoryDistractorQuestion(newQuestion)) return;
+    
+    setNewQuestion(prev => ({
+      ...prev,
+      realQuestion: {
+        ...prev.realQuestion,
+        correctAnswer: index
+      }
+    }));
   };
 
   // Renderizado condicional según el tipo de pregunta
@@ -423,6 +588,19 @@ const QuestionManager: FC = () => {
           </div>
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2">
+              Tiempo de memorización (segundos)
+            </label>
+            <input
+              type="number"
+              value={newQuestion.memoryTime || 6}
+              onChange={(e) => handleMemoryTimeChange(Number(e.target.value))}
+              min={1}
+              max={30}
+              className="w-full p-2 border rounded-lg"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
               Imágenes para memorizar
             </label>
             <ImageUploader 
@@ -452,6 +630,152 @@ const QuestionManager: FC = () => {
                       <TrashIcon size={16} />
                     </button>
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      );
+    }
+    
+    if (isMemoryDistractorQuestion(newQuestion)) {
+      return (
+        <>
+          <div className="mb-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <h3 className="font-bold text-lg mb-2">Pregunta de Memoria con Distractor</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Este tipo de pregunta muestra una imagen para memorizar, luego presenta una pregunta de distracción 
+              (obligatoria pero sin puntaje), y finalmente evalúa al usuario con una pregunta relacionada con la imagen memorizada.
+            </p>
+          </div>
+          
+          {/* Configuración de la imagen a memorizar */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-bold text-md mb-2">1. Imagen para memorizar</h3>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Tiempo de memorización (segundos)
+              </label>
+              <input
+                type="number"
+                value={newQuestion.memoryTime || 6}
+                onChange={(e) => handleMemoryTimeChange(Number(e.target.value))}
+                min={1}
+                max={30}
+                className="w-full p-2 border rounded-lg"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Imagen para memorizar
+              </label>
+              <ImageUploader 
+                onImageUploaded={handleMemoryImageUpload}
+                folder={CLOUDINARY_FOLDERS.MEMORY}
+              />
+              <div className="grid grid-cols-1 gap-4 mt-4">
+                {newQuestion.images.map((image: string, index: number) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={image}
+                      alt={`Imagen ${index + 1}`}
+                      className="w-full rounded-lg max-h-64 object-contain"
+                    />
+                    <button
+                      onClick={() => handleMemoryImageDelete(index)}
+                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                    >
+                      <TrashIcon size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          {/* Configuración de la pregunta de distracción */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="font-bold text-md mb-2">2. Pregunta de distracción (no evaluable)</h3>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Texto de la pregunta de distracción
+              </label>
+              <textarea
+                value={newQuestion.distractor.question}
+                onChange={(e) => handleDistractorQuestionChange(e.target.value)}
+                className="w-full p-2 border rounded-lg"
+                rows={2}
+                placeholder="Ej: ¿Cuál es la capital de Francia?"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Opciones (la pregunta de distracción no suma puntos)
+              </label>
+              {newQuestion.distractor.options.map((option: string, index: number) => (
+                <div key={index} className="flex items-center mb-2">
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => handleDistractorOptionChange(index, e.target.value)}
+                    className="flex-1 p-2 border rounded-lg mr-2"
+                    placeholder={`Opción ${index + 1}`}
+                  />
+                  <input
+                    type="radio"
+                    name="distractorCorrectAnswer"
+                    checked={newQuestion.distractor.correctAnswer === index}
+                    onChange={() => handleDistractorCorrectAnswerChange(index)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm text-gray-600">Correcta</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Configuración de la pregunta real */}
+          <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+            <h3 className="font-bold text-md mb-2">3. Pregunta real (evaluable)</h3>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Texto de la pregunta real
+              </label>
+              <textarea
+                value={newQuestion.realQuestion.question}
+                onChange={(e) => handleRealQuestionChange(e.target.value)}
+                className="w-full p-2 border rounded-lg"
+                rows={2}
+                placeholder="Ej: ¿De qué color era la taza que aparecía en la imagen?"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Opciones
+              </label>
+              {newQuestion.realQuestion.options.map((option: string, index: number) => (
+                <div key={index} className="flex items-center mb-2">
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => handleRealOptionChange(index, e.target.value)}
+                    className="flex-1 p-2 border rounded-lg mr-2"
+                    placeholder={`Opción ${index + 1}`}
+                  />
+                  <input
+                    type="radio"
+                    name="realCorrectAnswer"
+                    checked={newQuestion.realQuestion.correctAnswer === index}
+                    onChange={() => handleRealCorrectAnswerChange(index)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm text-gray-600">Correcta</span>
                 </div>
               ))}
             </div>
@@ -558,6 +882,7 @@ const QuestionManager: FC = () => {
               <option value="Texto">Texto</option>
               <option value="TextoImagen">Texto con Imagen</option>
               <option value="Memoria">Memoria</option>
+              <option value="MemoriaDistractor">Memoria con Distractor</option>
               <option value="Distracción">Distracción</option>
               <option value="Secuencia">Secuencia</option>
             </select>

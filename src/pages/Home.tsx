@@ -8,7 +8,7 @@ import TestAnimation from '../components/TestAnimation';
 const Stats = lazy(() => import('../components/Stats'));
 const Features = lazy(() => import('../components/Features'));
 const Testimonials = lazy(() => import('../components/Testimonials'));
-const PlanList = lazy(() => import('../components/admin/PlansManager'));
+const PlanList = lazy(() => import('../components/plans/PlanList'));
 const WhyChooseUs = lazy(() => import('../components/WhyChooseUs'));
 
 // Componente de carga

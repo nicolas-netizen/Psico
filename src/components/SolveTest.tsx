@@ -494,24 +494,26 @@ const SolveTest = () => {
         // Durante la fase de memorización, solo mostrar la imagen correcta
         const correctImage = memoryQuestion.images[memoryQuestion.correctImageIndex];
         return (
-          <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl mb-4 shadow-sm border border-gray-100">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-base font-bold text-gray-800">
-                Memoriza la siguiente imagen
-              </h2>
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="text-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">Memoriza la siguiente imagen</h2>
+              <p className="text-sm text-gray-500 mt-1">Tendrás {memoryQuestion.memorizeTime || 10} segundos</p>
             </div>
             <div className="flex justify-center mb-4">
-              <img 
-                src={correctImage} 
-                alt="Imagen a memorizar"
-                className="max-w-full h-auto rounded-lg shadow-md"
-                style={{ maxHeight: '400px', objectFit: 'contain' }}
-                loading="lazy"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = 'https://via.placeholder.com/150x150?text=Error+al+cargar+imagen';
-                }}
-              />
+              <div className="w-full max-w-md h-64 border border-gray-200 rounded-lg overflow-hidden flex items-center justify-center">
+                <img 
+                  src={correctImage} 
+                  alt="Imagen a memorizar"
+                  className="max-w-full max-h-full object-contain"
+                  loading="lazy"
+                  onError={(e) => {
+                    console.error('Error loading image:', correctImage);
+                    const target = e.target as HTMLImageElement;
+                    target.src = 'https://firebasestorage.googleapis.com/v0/b/psicotecnicos-app.appspot.com/o/test_images%2Fdefault_memory_test.jpg?alt=media';
+                    toast.error('No se pudo cargar la imagen. Se muestra una imagen de ejemplo.');
+                  }}
+                />
+              </div>
             </div>
           </div>
         );
@@ -529,8 +531,8 @@ const SolveTest = () => {
       const displayImages = memoryQuestion.shuffledOrder || shuffledImages;
 
       return (
-        <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl mb-4 shadow-sm border border-gray-100">
-          <h2 className="text-base font-bold text-gray-800 mb-4">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h2 className="text-xl font-semibold text-center mb-4">
             Selecciona la imagen que viste anteriormente
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -540,21 +542,23 @@ const SolveTest = () => {
                   onClick={() => handleAnswerSelection(index)}
                   className={`border-2 rounded-lg p-2 transition-all duration-200 ${
                     selectedAnswers[currentQuestionIndex] === index
-                      ? 'border-[#91c26a] shadow-lg scale-105'
-                      : 'border-transparent hover:border-gray-300'
+                      ? 'border-[#91c26a] bg-green-50 shadow-md scale-102'
+                      : 'border-gray-200 hover:border-[#91c26a] hover:bg-green-50/30'
                   }`}
                 >
-                  <img
-                    src={imageUrl}
-                    alt={`Opción ${index + 1}`}
-                    className="max-w-full h-auto rounded-lg"
-                    style={{ maxHeight: '300px', objectFit: 'contain' }}
-                    loading="lazy"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'https://via.placeholder.com/150x150?text=Error+al+cargar+imagen';
-                    }}
-                  />
+                  <div className="w-full h-48 flex items-center justify-center">
+                    <img
+                      src={imageUrl}
+                      alt={`Opción ${index + 1}`}
+                      className="max-w-full max-h-full object-contain"
+                      loading="lazy"
+                      onError={(e) => {
+                        console.error('Error loading image:', imageUrl);
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'https://firebasestorage.googleapis.com/v0/b/psicotecnicos-app.appspot.com/o/test_images%2Fdefault_memory_test.jpg?alt=media';
+                      }}
+                    />
+                  </div>
                 </button>
               </div>
             ))}
@@ -565,26 +569,28 @@ const SolveTest = () => {
 
     const textQuestion = currentQuestion as TextQuestion;
     return (
-      <div className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl mb-4 shadow-sm border border-gray-100">
-        <h2 className="text-base font-bold text-gray-800 mb-4">
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <h2 className="text-xl font-semibold text-gray-800 mb-6">
           {textQuestion.text}
         </h2>
         {textQuestion.imageUrl && (
-          <div className="flex justify-center mb-4">
-            <img
-              src={getOptimizedImageUrl(textQuestion.imageUrl, {
-                width: 800,
-                quality: 80,
-              })}
-              alt="Imagen de la pregunta"
-              className="max-w-full h-auto rounded-lg shadow-md"
-              style={{ maxHeight: '300px' }}
-              loading="lazy"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.src = 'https://via.placeholder.com/150x150?text=Error+al+cargar+imagen';
-              }}
-            />
+          <div className="flex justify-center mb-6">
+            <div className="w-full max-w-lg h-64 border border-gray-200 rounded-lg overflow-hidden flex items-center justify-center">
+              <img
+                src={textQuestion.imageUrl ? getOptimizedImageUrl(textQuestion.imageUrl, {
+                  width: 800,
+                  quality: 80,
+                }) : ''}
+                alt="Imagen de la pregunta"
+                className="max-w-full max-h-full object-contain"
+                loading="lazy"
+                onError={(e) => {
+                  console.error('Error loading image:', textQuestion.imageUrl);
+                  const target = e.target as HTMLImageElement;
+                  target.src = 'https://firebasestorage.googleapis.com/v0/b/psicotecnicos-app.appspot.com/o/test_images%2Fdefault_question_image.jpg?alt=media';
+                }}
+              />
+            </div>
           </div>
         )}
       </div>

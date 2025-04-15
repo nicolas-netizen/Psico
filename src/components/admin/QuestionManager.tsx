@@ -21,13 +21,29 @@ interface BaseQuestion {
 
 interface QuestionData {
   id?: string;
+  type: QuestionType;
   blockType: BlockType;
   blockName: string;
   text?: string;
   options?: string[];
-  correctAnswer?: string;
+  correctAnswer?: string | number;
   isPublic: boolean;
   createdAt: Date;
+  imageUrl?: string;
+  images?: string[];
+  correctImageIndex?: number;
+  memoryTime?: number;
+  sequence?: string[];
+  distractor?: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+  };
+  realQuestion?: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+  };
 }
 
 interface TextQuestion extends QuestionData {
@@ -435,7 +451,7 @@ const QuestionManager: FC = () => {
     setNewQuestion(prev => ({
       ...prev,
       distractor: {
-        ...prev.distractor,
+        ...prev.distractor!,
         question
       }
     }));
@@ -444,13 +460,13 @@ const QuestionManager: FC = () => {
   const handleDistractorOptionChange = (index: number, value: string) => {
     if (!isMemoryDistractorQuestion(newQuestion)) return;
     
-    const newOptions = [...newQuestion.distractor.options];
+    const newOptions = [...newQuestion.distractor!.options];
     newOptions[index] = value;
     
     setNewQuestion(prev => ({
       ...prev,
       distractor: {
-        ...prev.distractor,
+        ...prev.distractor!,
         options: newOptions
       }
     }));
@@ -462,7 +478,7 @@ const QuestionManager: FC = () => {
     setNewQuestion(prev => ({
       ...prev,
       distractor: {
-        ...prev.distractor,
+        ...prev.distractor!,
         correctAnswer: index
       }
     }));
@@ -475,7 +491,7 @@ const QuestionManager: FC = () => {
     setNewQuestion(prev => ({
       ...prev,
       realQuestion: {
-        ...prev.realQuestion,
+        ...prev.realQuestion!,
         question
       }
     }));
@@ -484,13 +500,13 @@ const QuestionManager: FC = () => {
   const handleRealOptionChange = (index: number, value: string) => {
     if (!isMemoryDistractorQuestion(newQuestion)) return;
     
-    const newOptions = [...newQuestion.realQuestion.options];
+    const newOptions = [...newQuestion.realQuestion!.options];
     newOptions[index] = value;
     
     setNewQuestion(prev => ({
       ...prev,
       realQuestion: {
-        ...prev.realQuestion,
+        ...prev.realQuestion!,
         options: newOptions
       }
     }));
@@ -502,7 +518,7 @@ const QuestionManager: FC = () => {
     setNewQuestion(prev => ({
       ...prev,
       realQuestion: {
-        ...prev.realQuestion,
+        ...prev.realQuestion!,
         correctAnswer: index
       }
     }));
@@ -704,7 +720,7 @@ const QuestionManager: FC = () => {
                 Texto de la pregunta de distracción
               </label>
               <textarea
-                value={newQuestion.distractor.question}
+                value={newQuestion.distractor!.question}
                 onChange={(e) => handleDistractorQuestionChange(e.target.value)}
                 className="w-full p-2 border rounded-lg"
                 rows={2}
@@ -716,7 +732,7 @@ const QuestionManager: FC = () => {
               <label className="block text-gray-700 text-sm font-bold mb-2">
                 Opciones (la pregunta de distracción no suma puntos)
               </label>
-              {newQuestion.distractor.options.map((option: string, index: number) => (
+              {newQuestion.distractor!.options.map((option: string, index: number) => (
                 <div key={index} className="flex items-center mb-2">
                   <input
                     type="text"
@@ -728,7 +744,7 @@ const QuestionManager: FC = () => {
                   <input
                     type="radio"
                     name="distractorCorrectAnswer"
-                    checked={newQuestion.distractor.correctAnswer === index}
+                    checked={newQuestion.distractor!.correctAnswer === index}
                     onChange={() => handleDistractorCorrectAnswerChange(index)}
                     className="mr-2"
                   />
@@ -747,7 +763,7 @@ const QuestionManager: FC = () => {
                 Texto de la pregunta real
               </label>
               <textarea
-                value={newQuestion.realQuestion.question}
+                value={newQuestion.realQuestion?.question}
                 onChange={(e) => handleRealQuestionChange(e.target.value)}
                 className="w-full p-2 border rounded-lg"
                 rows={2}
@@ -759,7 +775,7 @@ const QuestionManager: FC = () => {
               <label className="block text-gray-700 text-sm font-bold mb-2">
                 Opciones
               </label>
-              {newQuestion.realQuestion.options.map((option: string, index: number) => (
+              {newQuestion.realQuestion!.options.map((option: string, index: number) => (
                 <div key={index} className="flex items-center mb-2">
                   <input
                     type="text"
@@ -771,7 +787,7 @@ const QuestionManager: FC = () => {
                   <input
                     type="radio"
                     name="realCorrectAnswer"
-                    checked={newQuestion.realQuestion.correctAnswer === index}
+                    checked={newQuestion.realQuestion!.correctAnswer === index}
                     onChange={() => handleRealCorrectAnswerChange(index)}
                     className="mr-2"
                   />

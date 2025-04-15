@@ -103,6 +103,51 @@ const SolveTest = () => {
     }
   }, [test]);
 
+  // Function to navigate to the previous question
+  const previousQuestion = () => {
+    if (!test || currentQuestionIndex === 0) return;
+    
+    // Handle any special memory steps if needed
+    if (showingMemoryImages) {
+      // If showing memory images, don't move to previous question
+      // Just keep current state and return
+      return;
+    }
+    
+    // Handle any special steps for memory distractor questions
+    if (currentQuestion?.type === 'MemoriaDistractor' && currentMemoryStep) {
+      if (currentMemoryStep === 'real') {
+        // Go back to distractor step
+        setCurrentMemoryStep('distractor');
+        return;
+      } else if (currentMemoryStep === 'distractor') {
+        // Can't go back to memorize step, just continue with normal navigation
+        setCurrentMemoryStep(null);
+        setDistractorAnswered(false);
+        setMemoryTimer(null);
+      }
+    }
+
+    // If we're at the first question of a block, go to the previous block's last question
+    const isFirstQuestionInBlock = currentBlockQuestions.indexOf(currentQuestion as Question) === 0;
+    
+    if (isFirstQuestionInBlock && currentQuestionIndex > 0) {
+      // Find the previous block name
+      const prevBlockName = test.questions[currentQuestionIndex - 1].blockName;
+      
+      // If it's a different block
+      if (prevBlockName !== currentBlock) {
+        // Move to the last question of the previous block
+        setCurrentBlock(prevBlockName);
+        setCurrentQuestionIndex(currentQuestionIndex - 1);
+        return;
+      }
+    }
+    
+    // Standard case - move to the previous question
+    setCurrentQuestionIndex(currentQuestionIndex - 1);
+  };
+  
   useEffect(() => {
     if (test?.questions && test.questions.length > 0) {
       // Solo iniciar el temporizador cuando cambia el bloque
@@ -200,6 +245,28 @@ const SolveTest = () => {
               blockType: q.blockType || 'Memoria',
               blockName: q.blockName || 'Memoria'
             } as MemoryQuestion;
+          } else if (q.type === 'MemoriaDistractor') {
+            return {
+              id: q.id || Math.random().toString(),
+              type: 'MemoriaDistractor',
+              images: Array.isArray(q.images) ? q.images : [],
+              correctImageIndex: typeof q.correctImageIndex === 'number' ? q.correctImageIndex : 0,
+              memoryTime: typeof q.memoryTime === 'number' ? q.memoryTime : 6,
+              distractor: q.distractor || {
+                question: q.distractor?.question || '',
+                options: q.distractor?.options || ['', '', '', ''],
+                correctAnswer: q.distractor?.correctAnswer || 0
+              },
+              realQuestion: q.realQuestion || {
+                question: q.realQuestion?.question || '',
+                options: q.realQuestion?.options || ['', '', '', ''],
+                correctAnswer: q.realQuestion?.correctAnswer || 0
+              },
+              blockType: q.blockType || 'Memoria',
+              blockName: q.blockName || 'Memoria',
+              _currentStep: 'memorize',
+              _distractorAnswered: false
+            } as MemoryDistractorQuestion;
           } else {
             throw new Error(`Tipo de pregunta desconocido: ${q.type}`);
           }

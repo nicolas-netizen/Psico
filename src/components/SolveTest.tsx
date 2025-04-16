@@ -100,6 +100,28 @@ const SolveTest = () => {
       setCurrentBlock(firstBlockName);
       setShowBlockIntro(true);
       setCurrentQuestionIndex(0);
+      
+      // Initialize memory question states if the first question is a memory distractor question
+      const firstQuestion = test.questions[0];
+      if (firstQuestion.type === 'MemoriaDistractor') {
+        setCurrentMemoryStep('memorize');
+        setShowingMemoryImages(true);
+        const memorizeTime = (firstQuestion as MemoryDistractorQuestion).memoryTime || 6;
+        setMemoryTimer(memorizeTime);
+        
+        // Start the memory timer to automatically advance to next step
+        const timer = setInterval(() => {
+          setMemoryTimer(prev => {
+            if (prev === null || prev <= 1) {
+              clearInterval(timer);
+              setShowingMemoryImages(false);
+              setCurrentMemoryStep('distractor');
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
     }
   }, [test]);
 

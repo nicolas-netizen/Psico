@@ -29,6 +29,10 @@ interface MemoryQuestion extends BaseQuestion {
   correctImageIndex: number;
   memorizeTime?: number; // tiempo en segundos para memorizar
   shuffledOrder?: string[]; // orden aleatorio de las imágenes para la selección
+  text?: string; // Texto de la pregunta que se muestra después de memorizar
+  options?: string[]; // Opciones de respuesta para la pregunta
+  correctAnswer?: number; // Índice de la respuesta correcta
+  memoryTime?: number; // Alias para memorizeTime para mantener consistencia con MemoriaDistractor
 }
 
 interface MemoryDistractorQuestion extends BaseQuestion {
@@ -869,16 +873,17 @@ const SolveTest = () => {
       const memoryQuestion = currentQuestion as MemoryQuestion;
       
       if (showingMemoryImages) {
+        // Fase 1: Mostrar imágenes para memorizar
         return (
           <div className="mb-6">
-            <h4 className="text-lg font-medium text-gray-800 mb-4">Memoriza las siguientes imágenes</h4>
-            <div className="grid grid-cols-2 gap-4">
+            <h4 className="text-lg font-medium text-gray-800 mb-4">Memoriza la siguiente imagen</h4>
+            <div className="flex justify-center">
               {memoryQuestion.images.map((image, index) => (
-                <div key={index} className="border rounded-lg p-2">
+                <div key={index} className="border rounded-lg p-2 max-w-xl">
                   <img 
                     src={getOptimizedImageUrl(image)} 
                     alt={`Imagen ${index + 1}`} 
-                    className="w-full h-48 object-contain"
+                    className="max-h-80 object-contain"
                   />
                 </div>
               ))}
@@ -886,9 +891,12 @@ const SolveTest = () => {
           </div>
         );
       } else {
+        // Fase 2: Mostrar la pregunta
         return (
           <div className="mb-6">
-            <h4 className="text-lg font-medium text-gray-800 mb-4">Selecciona la imagen correcta</h4>
+            <h4 className="text-lg font-medium text-gray-800 mb-4">
+              {memoryQuestion.text || '¿Qué elemento aparecía en la imagen que acabas de ver?'}
+            </h4>
           </div>
         );
       }
@@ -1011,6 +1019,37 @@ const SolveTest = () => {
       return (
         <div className="space-y-3">
           {(currentQuestion as TextQuestion).options.map((option, index) => (
+            <button
+              key={index}
+              onClick={() => handleAnswerSelection(index)}
+              className={`w-full text-left p-3 rounded-lg transition-colors ${selectedAnswers[currentQuestionIndex] === index ? 'bg-[#91c26a]/20 border-2 border-[#91c26a]' : 'bg-white border border-gray-200 hover:border-[#91c26a]/50 hover:bg-[#91c26a]/5'}`}
+            >
+              <span className="font-medium">{String.fromCharCode(65 + index)}.</span> {option}
+            </button>
+          ))}
+        </div>
+      );
+    }
+    
+    // Manejar preguntas tipo Memoria
+    if (currentQuestion.type === 'Memoria') {
+      const memoryQuestion = currentQuestion as MemoryQuestion;
+      
+      // No mostrar opciones durante la fase de memorización
+      if (showingMemoryImages) {
+        return null;
+      }
+      
+      // Mostrar opciones después de la fase de memorización
+      // Si no hay opciones o están vacías, usar un array con opciones por defecto
+      const defaultOptions = ['Opción A', 'Opción B', 'Opción C', 'Opción D'];
+      // Asegurarse de que siempre tengamos un array válido de opciones
+      const options = Array.isArray(memoryQuestion.options) && memoryQuestion.options.length > 0 ?
+                     memoryQuestion.options : defaultOptions;
+                     
+      return (
+        <div className="space-y-3">
+          {options.map((option: string, index: number) => (
             <button
               key={index}
               onClick={() => handleAnswerSelection(index)}

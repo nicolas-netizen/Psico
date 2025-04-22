@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, doc, getDoc, setDoc, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -124,6 +124,9 @@ const Dashboard: React.FC = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCreatingTest, setIsCreatingTest] = useState(false);
+  const [activeTest, setActiveTest] = useState<{id: string, title: string} | null>(null);
+  const [studyTimeRemaining, setStudyTimeRemaining] = useState<number>(0);
+  const studyTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -390,7 +393,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const BlockPerformance = ({ data }: { data: BlockPerformance[] }) => {
+    // Componente de rendimiento por bloque que se renderiza en la interfaz
+  const renderBlockPerformance = (data: BlockPerformance[]) => {
     return (
       <div className="bg-white rounded-xl shadow-sm p-6">
         <h3 className="text-lg font-semibold mb-4">Rendimiento por Bloque</h3>
@@ -473,6 +477,35 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const startStudyTimer = (testId: string, testTitle: string) => {
+    // Establecer el tiempo de estudio en 1 minuto (60 segundos)
+    setStudyTimeRemaining(60);
+    setActiveTest({id: testId, title: testTitle});
+    
+    // Limpiar cualquier temporizador existente
+    if (studyTimerRef.current) {
+      clearInterval(studyTimerRef.current);
+    }
+    
+    // Iniciar el temporizador nuevo
+    studyTimerRef.current = setInterval(() => {
+      setStudyTimeRemaining(prev => {
+        if (prev <= 1) {
+          // Cuando el temporizador llega a cero, limpiar el intervalo y navegar al test
+          clearInterval(studyTimerRef.current!);
+          navigate(`/solve-test/${testId}`);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    // Mostrar un mensaje al usuario
+    toast.info('Tienes 1 minuto para prepararte antes de iniciar el test');
+  };
+
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -511,6 +544,43 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Tiempo de Estudio - Aparece solo cuando hay un test activo */}
+      {activeTest && studyTimeRemaining > 0 && (
+        <div className="bg-gradient-to-br from-[#91c26a]/10 to-[#e9f5db] rounded-lg shadow-sm p-6 mb-8 border border-[#91c26a]/30">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Tiempo de Estudio</h2>
+              <p className="text-sm text-gray-600">Preparándote para: {activeTest.title}</p>
+            </div>
+            <div className="bg-[#91c26a] text-white text-2xl font-bold rounded-lg px-4 py-2">
+              {Math.floor(studyTimeRemaining / 60)}:{(studyTimeRemaining % 60).toString().padStart(2, '0')}
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div 
+                className="bg-[#91c26a] h-3 rounded-full transition-all duration-1000"
+                style={{ width: `${(studyTimeRemaining / 60) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-between">
+            <p className="text-sm text-gray-700">Usa este tiempo para prepararte. El test comenzará automáticamente cuando el tiempo termine.</p>
+            <button 
+              onClick={() => {
+                // Detener el temporizador y empezar el test inmediatamente
+                if (studyTimerRef.current) {
+                  clearInterval(studyTimerRef.current);
+                }
+                navigate(`/solve-test/${activeTest.id}`);
+              }}
+              className="bg-[#91c26a] hover:bg-[#82b35b] text-white px-4 py-1 rounded-md text-sm transition">
+              Comenzar ahora
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="bg-gradient-to-br from-white to-[#e9f5db] rounded-lg shadow-sm p-6 mb-8">
@@ -630,6 +700,13 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Rendimiento por Bloque */}
+      {performanceData.blockPerformance.length > 0 && (
+        <div className="mb-8">
+          {renderBlockPerformance(performanceData.blockPerformance)}
+        </div>
+      )}
+
       {/* Plan Information */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
         <div className="flex items-center justify-between mb-4">
@@ -678,7 +755,6 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       </div>
-
 
       {/* Modal de Personalización */}
       {showCustomizeModal && (

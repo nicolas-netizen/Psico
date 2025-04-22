@@ -682,31 +682,26 @@ const QuestionManager: FC = () => {
               <label className="block text-gray-700 text-sm font-bold mb-2">
                 Opciones de respuesta
               </label>
-              {newQuestion.options ? (
-                newQuestion.options.map((option: string, index: number) => (
-                  <div key={index} className="flex items-center mb-2">
-                    <input
-                      type="text"
-                      value={option}
-                      onChange={(e) => handleOptionChange(index, e.target.value)}
-                      className="flex-1 p-2 border rounded-lg mr-2"
-                      placeholder={`Opción ${index + 1}`}
-                    />
-                    <input
-                      type="radio"
-                      name="correctAnswer"
-                      checked={newQuestion.correctAnswer === index}
-                      onChange={() => handleCorrectAnswerChange(index)}
-                      className="mr-2"
-                    />
-                    <span className="text-sm text-gray-600">Correcta</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center p-4 bg-gray-100 rounded-lg">
-                  <p className="text-gray-600">Cargando opciones...</p>
+              {/* Siempre mostramos 4 opciones */}
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="flex items-center mb-2">
+                  <input
+                    type="text"
+                    value={newQuestion.options?.[index] || ''}
+                    onChange={(e) => handleOptionChange(index, e.target.value)}
+                    className="flex-1 p-2 border rounded-lg mr-2"
+                    placeholder={`Opción ${index + 1}`}
+                  />
+                  <input
+                    type="radio"
+                    name="correctAnswer"
+                    checked={newQuestion.correctAnswer === index}
+                    onChange={() => handleCorrectAnswerChange(index)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm text-gray-600">Correcta</span>
                 </div>
-              )}
+              ))}
               <p className="text-xs text-gray-500 mt-1">
                 Estas son las opciones entre las que el usuario podrá elegir después de memorizar la imagen.
               </p>

@@ -591,63 +591,125 @@ const QuestionManager: FC = () => {
     if (isMemoryQuestion(newQuestion)) {
       return (
         <>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Texto de la pregunta
-            </label>
-            <textarea
-              value={newQuestion.text}
-              onChange={(e) => handleTextChange(e.target.value)}
-              className="w-full p-2 border rounded-lg"
-              rows={4}
-            />
+          <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-bold text-lg mb-2">Pregunta de Memoria</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Este tipo de pregunta primero muestra una o más imágenes para que el usuario las memorice durante un tiempo determinado. 
+              Después, se le pregunta por la imagen correcta o detalles sobre lo que vio.
+            </p>
           </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Tiempo de memorización (segundos)
-            </label>
-            <input
-              type="number"
-              value={newQuestion.memoryTime || 6}
-              onChange={(e) => handleMemoryTimeChange(Number(e.target.value))}
-              min={1}
-              max={30}
-              className="w-full p-2 border rounded-lg"
-            />
+          
+          {/* Paso 1: Configuración de imágenes para memorizar */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-bold text-md mb-2">1. Fase de memorización</h3>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Tiempo de memorización (segundos)
+              </label>
+              <input
+                type="number"
+                value={newQuestion.memoryTime || 60}
+                onChange={(e) => handleMemoryTimeChange(Number(e.target.value))}
+                min={1}
+                max={120}
+                className="w-full p-2 border rounded-lg"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Esta es la duración que el usuario tendrá para memorizar las imágenes antes de ver la pregunta.
+              </p>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Imágenes para memorizar
+              </label>
+              <ImageUploader 
+                onImageUploaded={handleMemoryImageUpload}
+                folder={CLOUDINARY_FOLDERS.MEMORY}
+              />
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                {newQuestion.images.map((image: string, index: number) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={image}
+                      alt={`Imagen ${index + 1}`}
+                      className="w-full rounded-lg"
+                    />
+                    <div className="absolute top-2 right-2 flex space-x-2">
+                      <input
+                        type="radio"
+                        name="correctImage"
+                        checked={newQuestion.correctImageIndex === index}
+                        onChange={() => handleCorrectImageChange(index)}
+                        className="mr-2"
+                      />
+                      <span className="text-xs text-white bg-gray-800 bg-opacity-70 px-1 rounded">Correcta</span>
+                      <button
+                        onClick={() => handleMemoryImageDelete(index)}
+                        className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                      >
+                        <TrashIcon size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Imágenes para memorizar
-            </label>
-            <ImageUploader 
-              onImageUploaded={handleMemoryImageUpload}
-              folder={CLOUDINARY_FOLDERS.MEMORY}
-            />
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              {newQuestion.images.map((image: string, index: number) => (
-                <div key={index} className="relative">
-                  <img
-                    src={image}
-                    alt={`Imagen ${index + 1}`}
-                    className="w-full rounded-lg"
-                  />
-                  <div className="absolute top-2 right-2 flex space-x-2">
+          
+          {/* Paso 2: Configuración de la pregunta */}
+          <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+            <h3 className="font-bold text-md mb-2">2. Fase de pregunta (evaluable)</h3>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Texto de la pregunta
+              </label>
+              <textarea
+                value={newQuestion.text}
+                onChange={(e) => handleTextChange(e.target.value)}
+                className="w-full p-2 border rounded-lg"
+                rows={4}
+                placeholder="Ej: ¿Qué elemento aparecía en la imagen que acabas de ver?"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Esta pregunta aparecerá después del tiempo de memorización.
+              </p>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Opciones de respuesta
+              </label>
+              {newQuestion.options ? (
+                newQuestion.options.map((option: string, index: number) => (
+                  <div key={index} className="flex items-center mb-2">
+                    <input
+                      type="text"
+                      value={option}
+                      onChange={(e) => handleOptionChange(index, e.target.value)}
+                      className="flex-1 p-2 border rounded-lg mr-2"
+                      placeholder={`Opción ${index + 1}`}
+                    />
                     <input
                       type="radio"
-                      name="correctImage"
-                      checked={newQuestion.correctImageIndex === index}
-                      onChange={() => handleCorrectImageChange(index)}
+                      name="correctAnswer"
+                      checked={newQuestion.correctAnswer === index}
+                      onChange={() => handleCorrectAnswerChange(index)}
                       className="mr-2"
                     />
-                    <button
-                      onClick={() => handleMemoryImageDelete(index)}
-                      className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                    >
-                      <TrashIcon size={16} />
-                    </button>
+                    <span className="text-sm text-gray-600">Correcta</span>
                   </div>
+                ))
+              ) : (
+                <div className="text-center p-4 bg-gray-100 rounded-lg">
+                  <p className="text-gray-600">Cargando opciones...</p>
                 </div>
-              ))}
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Estas son las opciones entre las que el usuario podrá elegir después de memorizar la imagen.
+              </p>
             </div>
           </div>
         </>
@@ -675,10 +737,10 @@ const QuestionManager: FC = () => {
               </label>
               <input
                 type="number"
-                value={newQuestion.memoryTime || 6}
+                value={newQuestion.memoryTime || 60}
                 onChange={(e) => handleMemoryTimeChange(Number(e.target.value))}
                 min={1}
-                max={30}
+                max={120}
                 className="w-full p-2 border rounded-lg"
               />
             </div>

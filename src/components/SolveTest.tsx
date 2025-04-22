@@ -244,7 +244,40 @@ const SolveTest = () => {
           setCurrentBlock(testData.questions[0].blockName);
         }
 
-        const formattedQuestions = testData.questions.map((q: any) => {
+        // Función para cargar detalles adicionales de preguntas si es necesario
+        const loadFullQuestionDetails = async (questionId: string) => {
+          try {
+            const questionRef = doc(db, 'questions', questionId);
+            const questionDoc = await getDoc(questionRef);
+            if (questionDoc.exists()) {
+              return questionDoc.data();
+            }
+            return null;
+          } catch (error) {
+            console.error('Error loading full question data:', error);
+            return null;
+          }
+        };
+
+        // Asegurarnos de que todas las preguntas de MemoriaDistractor tengan datos completos
+        const enhancedQuestions = [...testData.questions];
+        
+        // Primera pasada: Identificar preguntas MemoriaDistractor con datos incompletos
+        for (let i = 0; i < enhancedQuestions.length; i++) {
+          const q = enhancedQuestions[i];
+          if (q.type === 'MemoriaDistractor' && q.id && 
+              (!q.distractor || !q.realQuestion || !q.images || 
+               !q.distractor?.question || !q.realQuestion?.question)) {
+            console.log(`Pregunta ${i} incompleta, intentando cargar datos completos...`);
+            const fullData = await loadFullQuestionDetails(q.id);
+            if (fullData) {
+              console.log('Datos completos cargados:', fullData);
+              enhancedQuestions[i] = { ...q, ...fullData };
+            }
+          }
+        }
+        
+        const formattedQuestions = enhancedQuestions.map((q: any) => {
           console.log('Processing question:', q); // Debug
           if (q.type === 'Texto' || q.type === 'TextoImagen') {
             return {
@@ -268,22 +301,157 @@ const SolveTest = () => {
               blockName: q.blockName || 'Memoria'
             } as MemoryQuestion;
           } else if (q.type === 'MemoriaDistractor') {
+            // Detailed logging of the raw question data
+            console.log('MemoriaDistractor RAW data:', JSON.stringify(q, null, 2));
+            console.log('Keys in question object:', Object.keys(q));
+            
+            // Buscar recursivamente en el objeto para encontrar propiedades que podrían contener preguntas
+            const searchForQuestions = (obj: any, path = '') => {
+              if (!obj || typeof obj !== 'object') return;
+              
+              Object.keys(obj).forEach(key => {
+                const currentPath = path ? `${path}.${key}` : key;
+                console.log(`Property at ${currentPath}:`, obj[key]);
+                
+                if (key.toLowerCase().includes('question') || key.toLowerCase().includes('pregunta')) {
+                  console.log(`🔍 POSSIBLE QUESTION FOUND at ${currentPath}:`, obj[key]);
+                }
+                
+                if (typeof obj[key] === 'object' && obj[key] !== null) {
+                  searchForQuestions(obj[key], currentPath);
+                }
+              });
+            };
+            
+            console.log('=== SEARCHING FOR QUESTION PROPERTIES ===');
+            searchForQuestions(q);
+            console.log('=== END OF SEARCH ===');
+            
+            console.log('distractor property:', q.distractor);
+            console.log('realQuestion property:', q.realQuestion);
+            console.log('distractorQuestion property:', q.distractorQuestion);
+            console.log('memoryQuestion property:', q.memoryQuestion);
+            
+            // Handle potential structure variations in Firestore data
+            let distractorObj: any = {
+              question: '',
+              options: ['', '', '', ''],
+              correctAnswer: 0
+            };
+            
+            let realQuestionObj: any = {
+              question: '',
+              options: ['', '', '', ''],
+              correctAnswer: 0
+            };
+            
+            // Check different possible data structures and print debugging info
+            console.log('Checking distractor data structure...');
+            if (q.distractor) {
+              console.log('Found q.distractor with type:', typeof q.distractor);
+              if (typeof q.distractor === 'object') {
+                console.log('distractor as object keys:', Object.keys(q.distractor));
+                // Standard structure
+                distractorObj = {
+                  question: q.distractor.question || '',
+                  options: Array.isArray(q.distractor.options) ? q.distractor.options : ['', '', '', ''],
+                  correctAnswer: typeof q.distractor.correctAnswer === 'number' ? q.distractor.correctAnswer : 0
+                };
+              } else if (typeof q.distractor === 'string') {
+                // In case distractor is just a string question
+                distractorObj.question = q.distractor;
+              }
+            } else if (q.distractorQuestion) {
+              console.log('Found q.distractorQuestion instead:', q.distractorQuestion);
+              // Alternative field name
+              distractorObj.question = q.distractorQuestion;
+              if (q.distractorOptions) distractorObj.options = q.distractorOptions;
+              if (typeof q.distractorCorrectAnswer === 'number') {
+                distractorObj.correctAnswer = q.distractorCorrectAnswer;
+              }
+            }
+            
+            console.log('Checking realQuestion data structure...');
+            if (q.realQuestion) {
+              console.log('Found q.realQuestion with type:', typeof q.realQuestion);
+              if (typeof q.realQuestion === 'object') {
+                console.log('realQuestion as object keys:', Object.keys(q.realQuestion));
+                // Standard structure
+                realQuestionObj = {
+                  question: q.realQuestion.question || '',
+                  options: Array.isArray(q.realQuestion.options) ? q.realQuestion.options : ['', '', '', ''],
+                  correctAnswer: typeof q.realQuestion.correctAnswer === 'number' ? q.realQuestion.correctAnswer : 0
+                };
+              } else if (typeof q.realQuestion === 'string') {
+                // In case realQuestion is just a string question
+                realQuestionObj.question = q.realQuestion;
+              }
+            } else if (q.memoryQuestion) {
+              console.log('Found q.memoryQuestion instead:', q.memoryQuestion);
+              // Alternative field name
+              realQuestionObj.question = q.memoryQuestion;
+              if (q.memoryOptions) realQuestionObj.options = q.memoryOptions;
+              if (typeof q.memoryCorrectAnswer === 'number') {
+                realQuestionObj.correctAnswer = q.memoryCorrectAnswer;
+              }
+            }
+            
+            console.log('Normalized distractor:', distractorObj);
+            console.log('Normalized realQuestion:', realQuestionObj);
+            
+            // If we still have empty questions, try to look in the top level for question/options
+            if (!distractorObj.question && q.question) {
+              console.log('Using top-level question for distractor:', q.question);
+              distractorObj.question = q.question;
+            }
+            
+            if (distractorObj.options.every((o: string) => !o) && q.options) {
+              console.log('Using top-level options for distractor:', q.options);
+              distractorObj.options = q.options;
+            }
+            
+            // Si los datos aún están vacíos, usar valores predeterminados
+            if (!distractorObj.question) {
+              console.warn('⚠️ NO DISTRACTOR QUESTION FOUND IN DATA! Using default question.');
+              distractorObj.question = 'Pregunta de distracción (sin datos)';
+            }
+            
+            if (distractorObj.options.every((o: string) => !o)) {
+              console.warn('⚠️ DISTRACTOR OPTIONS ARE EMPTY! Using default options.');
+              distractorObj.options = ['Opción 1', 'Opción 2', 'Opción 3', 'Opción 4'];
+            }
+            
+            if (!realQuestionObj.question) {
+              console.warn('⚠️ NO REAL QUESTION FOUND IN DATA! Using default question.');
+              realQuestionObj.question = '¿Qué elementos recuerdas de la imagen?';
+            }
+            
+            if (realQuestionObj.options.every((o: string) => !o)) {
+              console.warn('⚠️ REAL QUESTION OPTIONS ARE EMPTY! Using default options.');
+              realQuestionObj.options = ['Opción 1', 'Opción 2', 'Opción 3', 'Opción 4'];
+            }
+            
+            // Verificar si hay imágenes, y si no hay, intentar usar otras fuentes
+            let images = [];
+            if (Array.isArray(q.images) && q.images.length > 0) {
+              images = q.images;
+            } else if (q.imageUrl) {
+              // Si no hay images[] pero hay un imageUrl, usarlo
+              images = [q.imageUrl];
+            } else {
+              console.warn('⚠️ NO IMAGES FOUND FOR MEMORY QUESTION! Using placeholder.');
+              // Usar una imagen placeholder para evitar errores
+              images = ['https://via.placeholder.com/400x300?text=Imagen+de+Memoria'];
+            }
+            
             return {
               id: q.id || Math.random().toString(),
               type: 'MemoriaDistractor',
-              images: Array.isArray(q.images) ? q.images : [],
+              images: images,
               correctImageIndex: typeof q.correctImageIndex === 'number' ? q.correctImageIndex : 0,
               memoryTime: typeof q.memoryTime === 'number' ? q.memoryTime : 6,
-              distractor: q.distractor || {
-                question: q.distractor?.question || '',
-                options: q.distractor?.options || ['', '', '', ''],
-                correctAnswer: q.distractor?.correctAnswer || 0
-              },
-              realQuestion: q.realQuestion || {
-                question: q.realQuestion?.question || '',
-                options: q.realQuestion?.options || ['', '', '', ''],
-                correctAnswer: q.realQuestion?.correctAnswer || 0
-              },
+              distractor: distractorObj,
+              realQuestion: realQuestionObj,
               blockType: q.blockType || 'Memoria',
               blockName: q.blockName || 'Memoria',
               _currentStep: 'memorize',
@@ -374,7 +542,7 @@ const SolveTest = () => {
       if (currentMemoryStep === 'distractor') {
         // Solo permitir avanzar si se ha respondido a la pregunta de distracción
         if (!distractorAnswered) {
-          toast.warning('Debes responder a la pregunta de distracción para continuar');
+          toast.warning('Debes responder la pregunta para continuar');
           return;
         }
         
@@ -733,9 +901,8 @@ const SolveTest = () => {
       if (currentMemoryStep === 'memorize') {
         return (
           <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
+            <div className="mb-4">
               <h4 className="text-lg font-medium text-gray-800">Memoriza la siguiente imagen</h4>
-              <div className="text-xl font-bold text-[#91c26a]">{memoryTimer}s</div>
             </div>
             <div className="flex justify-center">
               {memoryQuestion.images.length > 0 && (
@@ -754,24 +921,81 @@ const SolveTest = () => {
       
       // Paso 2: Mostrar la pregunta de distracción
       if (currentMemoryStep === 'distractor') {
+        // Debug the distractor object
+        console.log('Current distractor object:', memoryQuestion.distractor);
+        
+        // Check if distractor exists before trying to access its properties
+        if (!memoryQuestion.distractor) {
+          console.error('distractor is undefined for question:', memoryQuestion);
+          return (
+            <div className="mb-6">
+              <div className="p-3 bg-red-50 rounded-lg mb-4 border border-red-200">
+                <p className="text-sm text-red-700">Error: Datos de pregunta incompletos.</p>
+              </div>
+            </div>
+          );
+        }
+        
+        // For debugging, dump the full question object
+        console.log('Full memory question in distractor step:', JSON.stringify(memoryQuestion, null, 2));
+        
+        // Mostrar todos los datos disponibles para ayudar a identificar la estructura
+        console.log('ALL ACCESSIBLE PROPERTIES IN MEMORY QUESTION:');
+        Object.keys(memoryQuestion).forEach(key => {
+          console.log(`${key}:`, memoryQuestion[key]);
+        });
+        
+        // Special case: if the distractor question is empty but there are other properties
+        // we can use to identify what should be shown, use those
+        const questionText = memoryQuestion.distractor?.question || 
+                           (memoryQuestion as any).question || 
+                           // Intenta más propiedades posibles
+                           (memoryQuestion as any).distractorQuestion ||
+                           (memoryQuestion as any).pregunta ||
+                           (memoryQuestion as any).textoPregunta ||
+                           (memoryQuestion as any).texto ||
+                           'Pregunta de distracción no disponible (revisar logs)';
+        
         return (
           <div className="mb-6">
-            <div className="p-3 bg-yellow-50 rounded-lg mb-4 border border-yellow-200">
-              <p className="text-sm text-yellow-700">Esta pregunta es solo de distracción y no afecta tu puntaje.</p>
-            </div>
-            <h4 className="text-lg font-medium text-gray-800 mb-4">{memoryQuestion.distractor.question}</h4>
+
+            <h4 className="text-lg font-medium text-gray-800 mb-4">{questionText}</h4>
           </div>
         );
       }
       
       // Paso 3: Mostrar la pregunta real relacionada con la imagen
       if (currentMemoryStep === 'real') {
+        // Debug the realQuestion object
+        console.log('Current realQuestion object:', memoryQuestion.realQuestion);
+        
+        // Check if realQuestion exists before trying to access its properties
+        if (!memoryQuestion.realQuestion) {
+          console.error('realQuestion is undefined for question:', memoryQuestion);
+          return (
+            <div className="mb-6">
+              <div className="p-3 bg-red-50 rounded-lg mb-4 border border-red-200">
+                <p className="text-sm text-red-700">Error: Datos de pregunta incompletos.</p>
+              </div>
+            </div>
+          );
+        }
+        
+        // For debugging, dump the full question object
+        console.log('Full memory question in real step:', memoryQuestion);
+        
+        // Special case: if the real question is empty but there are other properties
+        // we can use to identify what should be shown, use those
+        const questionText = memoryQuestion.realQuestion?.question || 
+                           (memoryQuestion as any).memoryQuestion || 
+                           'Pregunta principal no disponible';
+                           
         return (
           <div className="mb-6">
             <div className="p-3 bg-green-50 rounded-lg mb-4 border border-green-200">
               <p className="text-sm text-green-700">Ahora, responde esta pregunta sobre la imagen que memorizaste.</p>
             </div>
-            <h4 className="text-lg font-medium text-gray-800 mb-4">{memoryQuestion.realQuestion.question}</h4>
+            <h4 className="text-lg font-medium text-gray-800 mb-4">{questionText}</h4>
           </div>
         );
       }
@@ -809,9 +1033,15 @@ const SolveTest = () => {
       
       // Mostrar opciones para la pregunta de distracción
       if (currentMemoryStep === 'distractor') {
+        // Si no hay opciones o están vacías, usar un array con opciones por defecto
+        const options = memoryQuestion.distractor.options.length > 0 && 
+                      !memoryQuestion.distractor.options.every((o: string) => !o) ?
+                      memoryQuestion.distractor.options : 
+                      ['Opción A', 'Opción B', 'Opción C', 'Opción D'];
+                      
         return (
           <div className="space-y-3">
-            {memoryQuestion.distractor.options.map((option, index) => (
+            {options.map((option, index) => (
               <button
                 key={index}
                 onClick={() => handleAnswerSelection(index)}
@@ -826,9 +1056,15 @@ const SolveTest = () => {
       
       // Mostrar opciones para la pregunta real
       if (currentMemoryStep === 'real') {
+        // Si no hay opciones o están vacías, usar un array con opciones por defecto
+        const options = memoryQuestion.realQuestion.options.length > 0 && 
+                      !memoryQuestion.realQuestion.options.every((o: string) => !o) ?
+                      memoryQuestion.realQuestion.options : 
+                      ['Opción A', 'Opción B', 'Opción C', 'Opción D'];
+                      
         return (
           <div className="space-y-3">
-            {memoryQuestion.realQuestion.options.map((option, index) => (
+            {options.map((option, index) => (
               <button
                 key={index}
                 onClick={() => handleAnswerSelection(index)}
@@ -992,24 +1228,27 @@ const SolveTest = () => {
                 {renderOptions()}
 
                 {/* Question Navigation */}
-                <div className="mt-8 flex flex-wrap gap-2">
-                  {currentBlockQuestions.map((question, blockIndex) => {
-                    if (!test) return null;
-                    const index = test.questions.indexOf(question);
-                    const isCurrentQuestion = index === currentQuestionIndex;
-                    const hasAnswer = selectedAnswers[index] !== undefined;
-
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentQuestionIndex(index)}
-                        className={`w-8 h-8 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center border-2 ${isCurrentQuestion ? 'bg-[#91c26a] text-white border-[#91c26a]' : hasAnswer ? 'bg-[#91c26a]/10 text-[#91c26a] border-[#91c26a]/30' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#91c26a]/50 hover:bg-[#91c26a]/5'}`}
-                      >
-                        {blockIndex + 1}
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* Verificar si la pregunta actual es de tipo Memoria o MemoriaDistractor */}
+                {!(currentQuestion?.type === 'Memoria' || currentQuestion?.type === 'MemoriaDistractor') && (
+                  <div className="mt-8 flex flex-wrap gap-2">
+                    {currentBlockQuestions.map((question, blockIndex) => {
+                      if (!test) return null;
+                      const index = test.questions.indexOf(question);
+                      const isCurrentQuestion = index === currentQuestionIndex;
+                      const hasAnswer = selectedAnswers[index] !== undefined;
+                      
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => setCurrentQuestionIndex(index)}
+                          className={`w-8 h-8 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center border-2 ${isCurrentQuestion ? 'bg-[#91c26a] text-white border-[#91c26a]' : hasAnswer ? 'bg-[#91c26a]/10 text-[#91c26a] border-[#91c26a]/30' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#91c26a]/50 hover:bg-[#91c26a]/5'}`}
+                        >
+                          {blockIndex + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {/* Navigation Buttons */}
                 <div className="mt-6 flex justify-between">

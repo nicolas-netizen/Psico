@@ -29,6 +29,9 @@ import PlansPage from './pages/PlansPage';
 import TestReview from './components/TestReview';
 import AdminReports from './pages/AdminReports';
 import Contact from './pages/Contact';
+// Importamos las páginas de pago con rutas absolutas para evitar problemas
+import Checkout from './pages/Checkout';
+import PaymentSuccess from './pages/PaymentSuccess';
 
 // Páginas legales
 import TermsOfService from './pages/legal/TermsOfService';
@@ -269,6 +272,28 @@ function App() {
                 <Layout>
                   <Contact />
                 </Layout>
+              }
+            />
+            
+            {/* Rutas de pago */}
+            <Route 
+              path="/checkout/:planId" 
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <Checkout />
+                  </Layout>
+                </PrivateRoute>
+              }
+            />
+            <Route 
+              path="/payment-success" 
+              element={
+                <PrivateRoute>
+                  <Layout>
+                    <PaymentSuccess />
+                  </Layout>
+                </PrivateRoute>
               }
             />
           </Routes>

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
-import { purchasePlan } from '../services/firestore';
-import { Check, Star, AlertCircle } from 'lucide-react';
+import { Check, Star, AlertCircle, CreditCard } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 interface Plan {
@@ -47,33 +46,17 @@ const PlansPage = () => {
   const handlePurchase = async (planId: string) => {
     if (!currentUser) {
       toast.error('Debes iniciar sesión para comprar un plan');
-      navigate('/login');
+      navigate('/login', { state: { from: `/checkout/${planId}` } });
       return;
     }
 
     try {
       setSelectedPlan(planId);
-      const result = await purchasePlan(currentUser.uid, planId);
-      
-      if (result.success) {
-        toast.success('¡Plan adquirido exitosamente!', {
-          position: "top-center",
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        });
-        
-        // Esperar un momento para que el usuario vea la notificación
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 1000);
-      }
+      // Redirigir al usuario a la página de checkout
+      navigate(`/checkout/${planId}`);
     } catch (error) {
-      console.error('Error purchasing plan:', error);
-      toast.error('Error al procesar la compra. Por favor, intenta nuevamente.');
-    } finally {
+      console.error('Error iniciando proceso de pago:', error);
+      toast.error('Error al iniciar el proceso de pago. Por favor, intenta nuevamente.');
       setSelectedPlan(null);
     }
   };
@@ -158,13 +141,14 @@ const PlansPage = () => {
                 <button
                   onClick={() => handlePurchase(plan.id)}
                   disabled={selectedPlan === plan.id}
-                  className={`w-full py-3 px-6 rounded-lg font-medium transition-colors
+                  className={`w-full py-3 px-6 rounded-lg font-medium transition-colors flex items-center justify-center
                              ${plan.isFeatured
                                ? 'bg-[#91c26a] text-white hover:bg-[#82b35b]'
                                : 'border-2 border-[#91c26a] text-[#91c26a] hover:bg-[#91c26a] hover:text-white'
                              } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  {selectedPlan === plan.id ? 'Procesando...' : 'Seleccionar Plan'}
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  {selectedPlan === plan.id ? 'Procesando...' : 'Pagar Ahora'}
                 </button>
               </div>
             </div>
@@ -195,8 +179,8 @@ const PlansPage = () => {
                 ¿Qué métodos de pago aceptan?
               </h3>
               <p className="text-gray-600">
-                Por el momento, el proceso de pago es manual. Próximamente implementaremos pagos con
-                tarjeta de crédito, PayPal y otros métodos.
+                Aceptamos pagos con tarjetas de crédito/débito a través de Stripe y también PayPal.
+                Todos nuestros métodos de pago son seguros y encriptados.
               </p>
             </div>
 

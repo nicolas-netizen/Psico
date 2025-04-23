@@ -1,3 +1,6 @@
+// Importar el logger primero para que se inicialice antes que otros módulos
+import './utils/logger';
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';

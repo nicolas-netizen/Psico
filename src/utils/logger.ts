@@ -45,6 +45,8 @@ class Logger {
       context,
     };
     this.addLog(entry);
+    
+    // Solo mostrar logs en desarrollo
     if (process.env.NODE_ENV === 'development') {
       console.info(`[INFO] ${message}`, context);
     }
@@ -58,7 +60,11 @@ class Logger {
       context,
     };
     this.addLog(entry);
-    console.warn(`[WARN] ${message}`, context);
+    
+    // Solo mostrar logs en desarrollo
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[WARN] ${message}`, context);
+    }
   }
 
   error(message: string, error?: Error, context?: Record<string, any>): void {
@@ -69,9 +75,13 @@ class Logger {
       context: { ...context, error: error?.toString() },
     };
     this.addLog(entry);
-    console.error(`[ERROR] ${message}`, error, context);
     
-    // Enviar a Sentry
+    // En producción, solo enviar a Sentry, sin mostrar en consola
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`[ERROR] ${message}`, error, context);
+    }
+    
+    // Enviar a Sentry en todos los entornos
     if (error) {
       Sentry.captureException(error, {
         extra: context,
@@ -102,3 +112,13 @@ class Logger {
 }
 
 export const logger = Logger.getInstance();
+
+// Sobrescribir los métodos de console en producción
+if (process.env.NODE_ENV === 'production') {
+  // Implementación vacía para producción
+  console.log = () => {};
+  console.info = () => {};
+  console.warn = () => {};
+  console.error = () => {};
+  console.debug = () => {};
+}

@@ -929,12 +929,8 @@ const SolveTest = () => {
       
       // Paso 2: Mostrar la pregunta de distracción
       if (currentMemoryStep === 'distractor') {
-        // Debug the distractor object
-        console.log('Current distractor object:', memoryQuestion.distractor);
-        
         // Check if distractor exists before trying to access its properties
         if (!memoryQuestion.distractor) {
-          console.error('distractor is undefined for question:', memoryQuestion);
           return (
             <div className="mb-6">
               <div className="p-3 bg-red-50 rounded-lg mb-4 border border-red-200">
@@ -943,15 +939,6 @@ const SolveTest = () => {
             </div>
           );
         }
-        
-        // For debugging, dump the full question object
-        console.log('Full memory question in distractor step:', JSON.stringify(memoryQuestion, null, 2));
-        
-        // Mostrar todos los datos disponibles para ayudar a identificar la estructura
-        console.log('ALL ACCESSIBLE PROPERTIES IN MEMORY QUESTION:');
-        Object.keys(memoryQuestion).forEach(key => {
-          console.log(`${key}:`, memoryQuestion[key]);
-        });
         
         // Special case: if the distractor question is empty but there are other properties
         // we can use to identify what should be shown, use those
@@ -974,12 +961,8 @@ const SolveTest = () => {
       
       // Paso 3: Mostrar la pregunta real relacionada con la imagen
       if (currentMemoryStep === 'real') {
-        // Debug the realQuestion object
-        console.log('Current realQuestion object:', memoryQuestion.realQuestion);
-        
         // Check if realQuestion exists before trying to access its properties
         if (!memoryQuestion.realQuestion) {
-          console.error('realQuestion is undefined for question:', memoryQuestion);
           return (
             <div className="mb-6">
               <div className="p-3 bg-red-50 rounded-lg mb-4 border border-red-200">
@@ -988,9 +971,6 @@ const SolveTest = () => {
             </div>
           );
         }
-        
-        // For debugging, dump the full question object
-        console.log('Full memory question in real step:', memoryQuestion);
         
         // Special case: if the real question is empty but there are other properties
         // we can use to identify what should be shown, use those

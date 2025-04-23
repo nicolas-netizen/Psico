@@ -146,8 +146,7 @@ const Dashboard: React.FC = () => {
             const planDoc = await getDoc(doc(db, 'plans', userData.planId));
             const planData = planDoc.data();
             
-            console.log('Plan Data:', planData);
-            console.log('customTestsEnabled:', planData?.customTestsEnabled);
+            // Acceder a los datos del plan sin hacer log
             
             setUserPlan({
               name: userData.planName,
@@ -156,12 +155,6 @@ const Dashboard: React.FC = () => {
               customTestsEnabled: planData?.customTestsEnabled || false
             });
 
-            console.log('User Plan State:', {
-              name: userData.planName,
-              expiresAt: userData.planExpiresAt,
-              purchasedAt: userData.planPurchasedAt,
-              customTestsEnabled: planData?.customTestsEnabled || false
-            });
 
             // Calcular días restantes
             if (userData.planExpiresAt) {
@@ -186,7 +179,7 @@ const Dashboard: React.FC = () => {
           const resultsData = resultsSnapshot.docs
             .map(doc => {
               const data = doc.data();
-              console.log('Resultado raw de Firestore:', data);
+              // Procesar datos sin logging
               return {
                 id: doc.id,
                 ...data,
@@ -199,7 +192,7 @@ const Dashboard: React.FC = () => {
               return dateB.getTime() - dateA.getTime();
             }) as TestResult[];
             
-          console.log('Resultados procesados:', resultsData);
+          // Datos de resultados procesados
           setUserResults(resultsData);
 
           // Procesar datos para los gráficos
@@ -221,7 +214,7 @@ const Dashboard: React.FC = () => {
 
           // Calcular rendimiento por bloque
           const blockPerformanceData = calculateBlockPerformance(resultsData);
-          console.log('Rendimiento por bloque calculado:', blockPerformanceData);
+          // Rendimiento por bloque calculado
 
           // Calcular distribución de categorías
           const categoryStats = resultsData
@@ -360,7 +353,8 @@ const Dashboard: React.FC = () => {
           total: stats.total
         };
       })
-      .filter(block => block.score > 0);
+      // Mostramos todos los bloques, sin filtrar por puntaje
+      .sort((a, b) => b.score - a.score); // Ordenamos de mayor a menor puntaje
   };
 
   const calculateUserStats = (results: TestResult[]) => {

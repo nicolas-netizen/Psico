@@ -13,14 +13,24 @@ class Logger {
   private static instance: Logger;
   private logs: LogEntry[] = [];
   private readonly MAX_LOGS = 1000;
+  private sentryInitialized = false;
 
   private constructor() {
-    // Inicializar Sentry
-    Sentry.init({
-      dsn: process.env.VITE_SENTRY_DSN,
-      environment: process.env.NODE_ENV,
-      tracesSampleRate: 1.0,
-    });
+    try {
+      // Inicializar Sentry solo si tenemos DSN configurado
+      if (import.meta.env.VITE_SENTRY_DSN) {
+        Sentry.init({
+          dsn: import.meta.env.VITE_SENTRY_DSN,
+          environment: import.meta.env.MODE,
+          tracesSampleRate: 1.0,
+        });
+        this.sentryInitialized = true;
+      } else {
+        console.warn('Sentry DSN no configurado, el rastreo de errores está deshabilitado');
+      }
+    } catch (error) {
+      console.warn('Error al inicializar Sentry:', error);
+    }
   }
 
   static getInstance(): Logger {
@@ -47,7 +57,7 @@ class Logger {
     this.addLog(entry);
     
     // Solo mostrar logs en desarrollo
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.info(`[INFO] ${message}`, context);
     }
   }
@@ -62,7 +72,7 @@ class Logger {
     this.addLog(entry);
     
     // Solo mostrar logs en desarrollo
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.warn(`[WARN] ${message}`, context);
     }
   }
@@ -77,20 +87,25 @@ class Logger {
     this.addLog(entry);
     
     // En producción, solo enviar a Sentry, sin mostrar en consola
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.error(`[ERROR] ${message}`, error, context);
     }
     
-    // Enviar a Sentry en todos los entornos
-    if (error) {
-      Sentry.captureException(error, {
-        extra: context,
-      });
+    // Enviar a Sentry en todos los entornos solo si está inicializado
+    if (error && this.sentryInitialized) {
+      try {
+        Sentry.captureException(error, {
+          extra: context,
+        });
+      } catch (sentryError) {
+        // Fallback a console.error si Sentry falla
+        console.error('Error al enviar excepción a Sentry:', sentryError);
+      }
     }
   }
 
   debug(message: string, context?: Record<string, any>): void {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       const entry = {
         message,
         level: 'debug' as LogLevel,
@@ -114,11 +129,11 @@ class Logger {
 export const logger = Logger.getInstance();
 
 // Sobrescribir los métodos de console en producción
-if (process.env.NODE_ENV === 'production') {
+if (import.meta.env.PROD) {
   // Implementación vacía para producción
+  // Nota: Mantener console.error para errores críticos
   console.log = () => {};
   console.info = () => {};
   console.warn = () => {};
-  console.error = () => {};
   console.debug = () => {};
 }
